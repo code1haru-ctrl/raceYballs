@@ -24,7 +24,7 @@ export function Header({ onOpenSettings }: HeaderProps) {
 
         <div className="flex shrink-0 items-center gap-2 sm:gap-3">
           <span className="badge badge--cyan hidden md:inline-flex">
-            PHASE 3B · RECOVERY
+            PHASE 4 · CUSTOMIZE
           </span>
           <button
             type="button"

@@ -45,7 +45,7 @@ export function RaceStatusPanel({
     <Panel
       eyebrow="Control deck"
       title="Race status"
-      action={<span className="badge badge--cyan">Phase 3B</span>}
+      action={<span className="badge badge--cyan">Phase 4</span>}
     >
       <div className="flex items-center gap-3">
         <span className="status-dot" aria-hidden="true" />

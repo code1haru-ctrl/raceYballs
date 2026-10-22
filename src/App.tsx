@@ -99,7 +99,7 @@ function App() {
 
         <footer className="mx-auto flex w-full max-w-7xl flex-col gap-1.5 px-4 pb-6 text-[0.62rem] text-dim sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
           <p className="font-mono tracking-[0.18em] uppercase">
-            raceYballs · Phase 3B stuck recovery
+            raceYballs · Phase 4 customization
           </p>
           <p className="flex items-center gap-2">
             <span
