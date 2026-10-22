@@ -10,6 +10,7 @@ import { drawRace } from '../render/raceRenderer'
 import { buildTrack, DEFAULT_SEEDS } from '../track/generate'
 import type { TrackData } from '../track/track'
 import { formatSpeed } from './format'
+import { RecoveryManager } from './recovery'
 import type { FinishRecord, MarbleStanding, RaceSnapshot, RaceState } from './types'
 
 export const MIN_SPEED = 0.5
@@ -41,6 +42,7 @@ function clamp(value: number, min: number, max: number): number {
 export class RaceController {
   private sim: MarbleRaceSimulation
   private camera: RaceCamera
+  private recovery: RecoveryManager
   private listeners = new Set<() => void>()
   private snapshot: RaceSnapshot
   private state: RaceState = 'Ready'
@@ -62,13 +64,28 @@ export class RaceController {
       buildTrack(this.trackId, this.seed),
     )
     this.camera = new RaceCamera(this.sim.track)
+    this.recovery = new RecoveryManager(this.sim.track)
+    this.wireCallbacks()
+    this.snapshot = this.buildSnapshot()
+  }
+
+  /**
+   * Connects the simulation and the recovery manager to the controller.
+   *
+   * Recovery runs on the same clock as the physics: every frame the stuck
+   * detector samples the marbles that are still racing and asks the
+   * simulation to move the ones that got stuck onto a safe spot of the
+   * racing line. A marble that runs out of attempts becomes a DNF.
+   */
+  private wireCallbacks(): void {
     this.sim.onFinish = () => this.publish()
+    this.sim.onDnf = () => this.publish()
     this.sim.onComplete = () => {
       this.state = 'Completed'
       this.accumulator = 0
       this.publish()
     }
-    this.snapshot = this.buildSnapshot()
+    this.recovery.onRecover = () => this.publish()
   }
 
   subscribe = (listener: () => void): (() => void) => {
@@ -107,12 +124,8 @@ export class RaceController {
     this.seed = seed
     const track: TrackData = buildTrack(trackId, seed)
     this.sim = new MarbleRaceSimulation(MARBLE_DEFINITIONS, track)
-    this.sim.onFinish = () => this.publish()
-    this.sim.onComplete = () => {
-      this.state = 'Completed'
-      this.accumulator = 0
-      this.publish()
-    }
+    this.recovery = new RecoveryManager(this.sim.track)
+    this.wireCallbacks()
     this.camera = new RaceCamera(track)
     this.state = 'Ready'
     this.accumulator = 0
@@ -133,6 +146,7 @@ export class RaceController {
   /** Stops the race, rebuilds the physics world and restores the start view. */
   reset = (): void => {
     this.sim.reset(MARBLE_DEFINITIONS)
+    this.recovery.reset()
     this.state = 'Ready'
     this.accumulator = 0
     this.lastPublishedSecond = -1
@@ -199,6 +213,10 @@ export class RaceController {
         steps += 1
         if (this.state !== 'Running') break
       }
+
+      // Stuck detection and recovery run on the simulated clock, right after
+      // the physics of this frame.
+      if (this.state === 'Running') this.recovery.update(this.sim)
     }
 
     const alpha =
@@ -228,7 +246,7 @@ export class RaceController {
       state: this.state,
       elapsedSec: this.sim.elapsed(),
       finishedCount: this.sim.finishedCount(),
-      unfinishedCount: this.sim.unfinishedCount(),
+      dnfCount: this.sim.dnfCount(),
       speedLabel: formatSpeed(this.speed),
     })
 
@@ -284,7 +302,7 @@ export class RaceController {
       speed: this.speed,
       elapsedSec: this.sim.elapsed(),
       finishedCount: this.sim.finishedCount(),
-      unfinishedCount: this.sim.unfinishedCount(),
+      dnfCount: this.sim.dnfCount(),
       trackId: this.trackId,
       seed: this.seed,
       results,

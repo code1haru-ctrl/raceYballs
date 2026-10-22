@@ -17,7 +17,7 @@ function statusLine(snapshot: RaceSnapshot): string {
     case 'Running':
       return `Race in progress. ${snapshot.finishedCount} of 10 marbles have crossed the finish line.`
     case 'Completed':
-      return `Race complete. ${snapshot.finishedCount} finished and ${snapshot.unfinishedCount} unfinished.`
+      return `Race complete. ${snapshot.finishedCount} finished and ${snapshot.dnfCount} DNF.`
   }
 }
 

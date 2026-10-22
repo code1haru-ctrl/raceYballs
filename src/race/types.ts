@@ -2,7 +2,11 @@ import type { TrackId } from '../data'
 
 export type RaceState = 'Ready' | 'Running' | 'Completed'
 
-export type MarbleStatus = 'racing' | 'finished' | 'unfinished'
+/**
+ * `racing` is on the track, `finished` crossed the line, `dnf` is out of the
+ * race without a finishing position (recovery failed, or the race timed out).
+ */
+export type MarbleStatus = 'racing' | 'finished' | 'dnf'
 
 export interface FinishRecord {
   place: number
@@ -29,7 +33,8 @@ export interface RaceSnapshot {
   speed: number
   elapsedSec: number
   finishedCount: number
-  unfinishedCount: number
+  /** Marbles that are out of the race without a finishing position. */
+  dnfCount: number
   /** Currently loaded track and the seed its layout was generated from. */
   trackId: TrackId
   seed: number

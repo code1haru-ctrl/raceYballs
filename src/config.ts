@@ -2,9 +2,9 @@
  * Single source of truth for simulation constants.
  *
  * Every value the physics engine is tuned by lives here — timestep, gravity,
- * marble size and surface properties, solver iterations and the temporary
- * safety limit. Nothing in the engine, track, renderer or tests may define a
- * second copy of these numbers.
+ * marble size and surface properties, solver iterations, and the Phase 3B
+ * stuck-detection / recovery / DNF rules. Nothing in the engine, track,
+ * renderer or tests may define a second copy of these numbers.
  */
 
 /** Fixed physics timestep (simulation seconds per physics step). */
@@ -36,11 +36,31 @@ export const VELOCITY_ITERATIONS = 8
 export const POSITION_ITERATIONS = 3
 
 /**
- * TEMPORARY safety limit, in simulated seconds. Any marble still racing when
- * the limit is reached is reported as "unfinished" — never as finished and
- * never as DNF; no position is invented for it.
+ * Phase 3B — stuck detection, recovery and DNF.
  *
- * Phase 3 will replace this limit with stuck-marble recovery, after which the
- * limit itself can be removed.
+ * A marble is "stuck" when it fails to make forward progress along the
+ * centerline inside `STUCK_WINDOW_S`. Stuck marbles get a bounded number of
+ * recovery attempts (each one puts them back on a clear piece of the racing
+ * line that is never ahead of the progress they had already reached). When
+ * the attempts run out — or when the race hits `HARD_RACE_LIMIT_S` — the
+ * marble is a DNF. No finishing position is ever invented for a DNF.
  */
-export const TEMP_SAFETY_LIMIT_S = 75
+
+/** Length of the window used to measure a marble's forward progress. */
+export const STUCK_WINDOW_S = 3
+/** Minimum forward progress inside that window, in marble diameters. */
+export const MIN_PROGRESS_D = 0.5
+/** How often progress is sampled and the stuck window is evaluated. */
+export const CHECK_INTERVAL_S = 0.5
+/** Cooldown before the same marble may be recovered again. */
+export const RECOVERY_COOLDOWN_S = 2
+/** Maximum recovery attempts per marble before it becomes a DNF. */
+export const MAX_RECOVERY_ATTEMPTS = 3
+/** Grace period after the start before stuck detection is armed. */
+export const GRACE_AFTER_START_S = 3
+/** Minimum clearance a recovery spot needs from the track geometry, in D. */
+export const RECOVERY_CLEARANCE_D = 1.5
+/** Spacing between candidate recovery spots searched along the centerline. */
+export const RECOVERY_SAMPLE_STEP = 0.5
+/** Hard race timeout in simulated seconds; still-racing marbles are DNF. */
+export const HARD_RACE_LIMIT_S = 120

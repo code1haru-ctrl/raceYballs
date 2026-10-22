@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { FIXED_TIME_STEP, TEMP_SAFETY_LIMIT_S } from '../config'
+import { FIXED_TIME_STEP, HARD_RACE_LIMIT_S } from '../config'
 import { MARBLES } from '../data'
 import type { TrackData } from '../track/track'
 import { MarbleRaceSimulation, type MarbleState } from './MarbleRaceSimulation'
 
 const DEFS = MARBLES.map((marble) => ({ id: marble.id }))
-/** Long enough for the temporary safety limit to elapse plus margin. */
-const FULL_RACE_STEPS = Math.ceil((TEMP_SAFETY_LIMIT_S + 5) / FIXED_TIME_STEP)
+/** Long enough for the hard race limit to elapse plus margin. */
+const FULL_RACE_STEPS = Math.ceil((HARD_RACE_LIMIT_S + 5) / FIXED_TIME_STEP)
 
 function finishedInOrder(states: readonly MarbleState[]): MarbleState[] {
   return states
@@ -26,7 +26,7 @@ describe('stepping the simulation', () => {
       expect(state.finishOrder).not.toBeNull()
       expect(state.finishTime).not.toBeNull()
       expect(state.finishTime ?? 0).toBeGreaterThan(0)
-      expect(state.finishTime ?? Infinity).toBeLessThan(TEMP_SAFETY_LIMIT_S)
+      expect(state.finishTime ?? Infinity).toBeLessThan(HARD_RACE_LIMIT_S)
     }
 
     console.log(
@@ -75,7 +75,7 @@ describe('reset', () => {
     expect(sim.marbleStates()).toEqual(freshStates)
     expect(sim.marbleStates().every((state) => !state.finished)).toBe(true)
     expect(sim.finishedCount()).toBe(0)
-    expect(sim.unfinishedCount()).toBe(0)
+    expect(sim.dnfCount()).toBe(0)
     expect(sim.elapsed()).toBe(0)
     expect(sim.isCompleted()).toBe(false)
   })
@@ -113,8 +113,8 @@ const SEALED_TRACK: TrackData = {
   ],
 }
 
-describe('temporary safety limit', () => {
-  it('reports marbles that hit the limit as unfinished, never as finished or DNF', () => {
+describe('hard race limit', () => {
+  it('marks marbles that are still racing at the limit as DNF, never as finished', () => {
     const sim = new MarbleRaceSimulation(
       [{ id: 'sealed-one' }, { id: 'sealed-two' }],
       SEALED_TRACK,
@@ -123,12 +123,13 @@ describe('temporary safety limit', () => {
 
     expect(sim.isCompleted()).toBe(true)
     expect(sim.finishedCount()).toBe(0)
-    expect(sim.unfinishedCount()).toBe(states.length)
+    expect(sim.dnfCount()).toBe(states.length)
     for (const state of states) {
       expect(state.finished).toBe(false)
+      expect(state.dnf).toBe(true)
       expect(state.finishOrder).toBeNull()
       expect(state.finishTime).toBeNull()
     }
-    expect(sim.marbles.every((marble) => marble.status === 'unfinished')).toBe(true)
+    expect(sim.marbles.every((marble) => marble.status === 'dnf')).toBe(true)
   })
 })

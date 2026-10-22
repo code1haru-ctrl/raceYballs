@@ -29,7 +29,7 @@ function detailFor(snapshot: RaceSnapshot): string {
     case 'Running':
       return `${snapshot.finishedCount} of 10 finished · ${formatElapsed(snapshot.elapsedSec)} elapsed`
     case 'Completed':
-      return `${snapshot.finishedCount} finished · ${snapshot.unfinishedCount} unfinished · results below`
+      return `${snapshot.finishedCount} finished · ${snapshot.dnfCount} DNF · results below`
   }
 }
 
@@ -43,7 +43,7 @@ export function RaceStatusPanel({
     <Panel
       eyebrow="Control deck"
       title="Race status"
-      action={<span className="badge badge--cyan">Phase 3A</span>}
+      action={<span className="badge badge--cyan">Phase 3B</span>}
     >
       <div className="flex items-center gap-3">
         <span className="status-dot" aria-hidden="true" />

@@ -19,7 +19,7 @@ export interface RenderStatusInfo {
   state: RaceState
   elapsedSec: number
   finishedCount: number
-  unfinishedCount: number
+  dnfCount: number
   speedLabel: string
 }
 
@@ -300,7 +300,7 @@ function drawMarbles(ctx: CanvasRenderingContext2D, sim: MarbleRaceSimulation): 
     if (!definition) continue
 
     const alpha =
-      marble.status === 'racing' ? 1 : marble.status === 'finished' ? 0.55 : 0.4
+      marble.status === 'racing' ? 1 : marble.status === 'finished' ? 0.55 : 0.35
     ctx.save()
     ctx.globalAlpha = alpha
 
@@ -418,7 +418,7 @@ function drawHud(
       dotColor = theme.accent
       break
     case 'Completed':
-      text = `COMPLETED · ${status.finishedCount} FINISHED · ${status.unfinishedCount} UNFINISHED`
+      text = `COMPLETED · ${status.finishedCount} FINISHED · ${status.dnfCount} DNF`
       dotColor = '#8df25c'
       break
   }

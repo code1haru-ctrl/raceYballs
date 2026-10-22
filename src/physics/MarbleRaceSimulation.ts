@@ -3,12 +3,12 @@ import {
   BAR_RESTITUTION,
   FIXED_TIME_STEP,
   GRAVITY_Y,
+  HARD_RACE_LIMIT_S,
   MARBLE_DENSITY,
   MARBLE_FRICTION,
   MARBLE_RADIUS,
   MARBLE_RESTITUTION,
   POSITION_ITERATIONS,
-  TEMP_SAFETY_LIMIT_S,
   TRACK_FRICTION,
   TRACK_RESTITUTION,
   VELOCITY_ITERATIONS,
@@ -18,6 +18,15 @@ import { PROTOTYPE_TRACK, type TrackData } from '../track/track'
 
 export interface MarbleDefinition {
   id: string
+}
+
+/** Why a marble left the race without finishing. */
+export type DnfReason = 'recovery-failed' | 'race-timeout'
+
+export interface DnfEvent {
+  marbleId: string
+  reason: DnfReason
+  timeSec: number
 }
 
 export interface MarbleRuntime {
@@ -48,7 +57,9 @@ export interface MarbleState {
   vx: number
   vy: number
   finished: boolean
-  /** Position in the recorded finish order, or null if still unfinished. */
+  /** True when the marble is out of the race without finishing. */
+  dnf: boolean
+  /** Position in the recorded finish order, or null if the marble did not finish. */
   finishOrder: number | null
   finishTime: number | null
 }
@@ -61,8 +72,8 @@ export interface FinishEvent {
 
 /**
  * Owns the Planck.js world for one race: static track geometry, ten dynamic
- * marbles, the finish-line sensor, finish-order recording and the temporary
- * safety limit. Positions come from the physics engine only; nothing in here
+ * marbles, the finish-line sensor, finish-order recording and the Phase 3B
+ * DNF rules. Positions come from the physics engine only; nothing in here
  * reads from the renderer, the camera, React, the DOM or Canvas.
  */
 export class MarbleRaceSimulation {
@@ -75,10 +86,11 @@ export class MarbleRaceSimulation {
   private finishFixture: Fixture | null = null
   private simTime = 0
   private finishedTotal = 0
-  private unfinishedTotal = 0
+  private dnfTotal = 0
   private completed = false
 
   onFinish: ((event: FinishEvent) => void) | null = null
+  onDnf: ((event: DnfEvent) => void) | null = null
   onComplete: (() => void) | null = null
 
   constructor(defs: readonly MarbleDefinition[], track: TrackData = PROTOTYPE_TRACK) {
@@ -111,8 +123,8 @@ export class MarbleRaceSimulation {
     return this.finishedTotal
   }
 
-  unfinishedCount(): number {
-    return this.unfinishedTotal
+  dnfCount(): number {
+    return this.dnfTotal
   }
 
   isCompleted(): boolean {
@@ -137,6 +149,7 @@ export class MarbleRaceSimulation {
       vx: marble.vx,
       vy: marble.vy,
       finished: marble.status === 'finished',
+      dnf: marble.status === 'dnf',
       finishOrder: marble.place,
       finishTime: marble.timeSec,
     }))
@@ -195,21 +208,70 @@ export class MarbleRaceSimulation {
       }
     }
 
-    if (this.simTime >= TEMP_SAFETY_LIMIT_S) {
-      for (const marble of this.marbles) {
-        if (marble.status === 'racing') {
-          // Reported as unfinished: no finishing position is invented, and
-          // the marble is never counted as finished or as DNF.
-          marble.status = 'unfinished'
-          this.unfinishedTotal += 1
-        }
+    if (this.simTime >= HARD_RACE_LIMIT_S) {
+      // The race hit its hard limit: every marble still on the track is a DNF.
+      // No finishing position is invented for them.
+      for (let i = 0; i < this.marbles.length; i += 1) {
+        this.markDnf(i, 'race-timeout')
       }
     }
 
-    if (this.finishedTotal + this.unfinishedTotal >= this.marbles.length) {
+    if (!this.completed && this.finishedTotal + this.dnfTotal >= this.marbles.length) {
       this.completed = true
       this.onComplete?.()
     }
+  }
+
+  /**
+   * Takes a marble out of the race without a finishing position.
+   *
+   * The body is frozen and stops colliding so a retired marble can neither
+   * block a racer nor fall through the track. Returns false when the marble
+   * was not racing (it already finished or was already a DNF).
+   */
+  markDnf(index: number, reason: DnfReason): boolean {
+    const marble = this.marbles[index]
+    const body = this.bodies[index]
+    if (!marble || marble.status !== 'racing') return false
+
+    marble.status = 'dnf'
+    this.dnfTotal += 1
+
+    if (body) {
+      body.setType('static')
+      const fixture = body.getFixtureList()
+      if (fixture) body.destroyFixture(fixture)
+    }
+
+    this.onDnf?.({ marbleId: marble.id, reason, timeSec: this.simTime })
+    return true
+  }
+
+  /**
+   * Moves a marble to a new spot on the track (recovery).
+   *
+   * The body is re-placed, its velocity is zeroed and it is woken up so the
+   * engine keeps simulating it right away. Returns false when the marble is
+   * not racing.
+   */
+  teleportMarble(index: number, x: number, y: number): boolean {
+    const body = this.bodies[index]
+    const marble = this.marbles[index]
+    if (!body || !marble || marble.status !== 'racing') return false
+
+    body.setTransform({ x, y }, body.getAngle())
+    body.setLinearVelocity({ x: 0, y: 0 })
+    body.setAwake(true)
+
+    marble.x = x
+    marble.y = y
+    marble.vx = 0
+    marble.vy = 0
+    marble.prevX = x
+    marble.prevY = y
+    marble.renderX = x
+    marble.renderY = y
+    return true
   }
 
   /**
@@ -220,7 +282,7 @@ export class MarbleRaceSimulation {
     this.world = this.buildWorld(defs)
     this.simTime = 0
     this.finishedTotal = 0
-    this.unfinishedTotal = 0
+    this.dnfTotal = 0
     this.completed = false
     for (let i = 0; i < this.marbles.length; i += 1) {
       const marble = this.marbles[i]

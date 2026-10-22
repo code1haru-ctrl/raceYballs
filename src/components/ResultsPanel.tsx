@@ -10,7 +10,7 @@ interface ResultsPanelProps {
 
 function statusLabel(standing: MarbleStanding): string {
   if (standing.status === 'finished') return `P${standing.place}`
-  if (standing.status === 'unfinished') return 'UNFINISHED'
+  if (standing.status === 'dnf') return 'DNF'
   return 'RACING'
 }
 
@@ -29,8 +29,11 @@ export function ResultsPanel({ snapshot }: ResultsPanelProps) {
   const finishers = snapshot.standings.filter(
     (standing) => standing.status === 'finished',
   )
-  const pending = snapshot.standings.filter(
-    (standing) => standing.status !== 'finished',
+  const racing = snapshot.standings.filter(
+    (standing) => standing.status === 'racing',
+  )
+  const retired = snapshot.standings.filter(
+    (standing) => standing.status === 'dnf',
   )
 
   return (
@@ -94,16 +97,16 @@ export function ResultsPanel({ snapshot }: ResultsPanelProps) {
           {snapshot.state === 'Running' && (
             <p className="mt-3 flex items-center gap-2 text-[0.68rem] leading-relaxed text-dim">
               <Circle className="size-2.5 fill-neon-cyan text-neon-cyan" aria-hidden="true" />
-              {pending.length} marble{pending.length === 1 ? '' : 's'} still
+              {racing.length} marble{racing.length === 1 ? '' : 's'} still
               racing · times are simulated seconds
             </p>
           )}
 
-          {snapshot.state === 'Completed' && pending.length > 0 && (
+          {retired.length > 0 && (
             <div className="mt-3 border-t border-edge/50 pt-3">
-              <p className="eyebrow">Unfinished</p>
+              <p className="eyebrow">DNF</p>
               <ul className="mt-2 space-y-1.5">
-                {pending.map((standing) => (
+                {retired.map((standing) => (
                   <li
                     key={standing.id}
                     className="flex items-center gap-3 rounded-xl border border-edge/50 bg-void/30 p-2.5 opacity-80"
@@ -122,8 +125,9 @@ export function ResultsPanel({ snapshot }: ResultsPanelProps) {
                 ))}
               </ul>
               <p className="mt-2 text-[0.68rem] leading-relaxed text-dim">
-                Unfinished marbles never crossed the line within the temporary
-                safety limit, so no position is invented for them.
+                DNF marbles never crossed the line: recovery ran out of
+                attempts, or the race hit its time limit. No position is
+                invented for them.
               </p>
             </div>
           )}
