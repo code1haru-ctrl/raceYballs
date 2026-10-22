@@ -1,4 +1,4 @@
-import { Play, RotateCcw } from 'lucide-react'
+import { Play, RotateCcw, RefreshCw } from 'lucide-react'
 import type { Track } from '../data'
 import { formatElapsed, formatSpeed } from '../race/format'
 import type { RaceSnapshot } from '../race/types'
@@ -9,6 +9,7 @@ interface RaceStatusPanelProps {
   snapshot: RaceSnapshot
   onStart: () => void
   onReset: () => void
+  onRaceAgain?: () => void
 }
 
 function headlineFor(snapshot: RaceSnapshot): string {
@@ -38,6 +39,7 @@ export function RaceStatusPanel({
   snapshot,
   onStart,
   onReset,
+  onRaceAgain,
 }: RaceStatusPanelProps) {
   return (
     <Panel
@@ -98,6 +100,18 @@ export function RaceStatusPanel({
         <RotateCcw className="size-4" aria-hidden="true" />
         Reset Race
       </button>
+
+      {snapshot.state === 'Completed' && onRaceAgain && (
+        <button
+          type="button"
+          onClick={onRaceAgain}
+          className="btn-secondary mt-2 w-full py-2.5 text-xs"
+          title="Race again with same track and marbles but new seed"
+        >
+          <RefreshCw className="size-4" aria-hidden="true" />
+          Race Again
+        </button>
+      )}
 
       <p className="mt-2.5 text-[0.68rem] leading-relaxed text-dim">
         Finish order is recorded from real finish-line crossings in the

@@ -5,10 +5,10 @@ import {
 } from '../camera/RaceCamera'
 import type { RaceCamera } from '../camera/RaceCamera'
 import { MARBLE_RADIUS } from '../config'
-import { MARBLES } from '../data'
 import type { MarbleRaceSimulation } from '../physics/MarbleRaceSimulation'
 import type { RaceState } from '../race/types'
 import type { TrackData } from '../track/track'
+import { getDefaultMarbleConfigs, type MarbleConfig } from '../race/marbleCustomization'
 
 export interface RenderLayout {
   width: number
@@ -64,8 +64,7 @@ function shade(hex: string, amount: number): string {
 const BACKGROUND_TOP = '#070911'
 const BACKGROUND_BOTTOM = '#05060c'
 const MONO_FONT = '"Cascadia Code", Consolas, ui-monospace, monospace'
-const MARBLE_BY_ID = new Map(MARBLES.map((marble) => [marble.id, marble]))
-
+const DEFAULT_MARBLE_BY_ID = new Map(getDefaultMarbleConfigs().map((marble) => [marble.id, marble]))
 /**
  * Builds the canvas transform that maps world coordinates onto the canvas.
  *
@@ -97,9 +96,12 @@ export function drawRace(
   layout: RenderLayout,
   theme: RenderTheme,
   status: RenderStatusInfo,
+  marbleConfigs: readonly MarbleConfig[] = [],
 ): void {
   const { width, height, dpr } = layout
   if (width <= 0 || height <= 0) return
+
+  const configById = new Map(marbleConfigs.map((c) => [c.id, c]))
 
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
   ctx.clearRect(0, 0, width, height)
@@ -112,10 +114,10 @@ export function drawRace(
   drawTrackInterior(ctx, sim.track, theme.accent, view.scale)
   drawStartAndFinish(ctx, sim.track, theme.accent, view.scale)
   drawObstacles(ctx, sim.track, theme.accent, view.scale)
-  drawMarbles(ctx, sim)
+  drawMarbles(ctx, sim, configById)
   ctx.restore()
 
-  drawWorldLabels(ctx, camera, sim, layout, theme.accent)
+  drawWorldLabels(ctx, camera, sim, layout, theme.accent, configById)
   drawHud(ctx, width, height, theme, status)
 }
 
@@ -313,9 +315,13 @@ function drawObstacles(
   }
 }
 
-function drawMarbles(ctx: CanvasRenderingContext2D, sim: MarbleRaceSimulation): void {
+function drawMarbles(
+  ctx: CanvasRenderingContext2D,
+  sim: MarbleRaceSimulation,
+  configById: Map<string, MarbleConfig>,
+): void {
   for (const marble of sim.marbles) {
-    const definition = MARBLE_BY_ID.get(marble.id)
+    const definition = configById.get(marble.id) ?? DEFAULT_MARBLE_BY_ID.get(marble.id)
     if (!definition) continue
 
     const alpha =
@@ -357,6 +363,7 @@ function drawWorldLabels(
   sim: MarbleRaceSimulation,
   layout: RenderLayout,
   accent: string,
+  configById: Map<string, MarbleConfig>,
 ): void {
   const track = sim.track
   const { width, height } = layout
@@ -382,7 +389,7 @@ function drawWorldLabels(
 
   for (let index = 0; index < sim.marbles.length; index += 1) {
     const marble = sim.marbles[index]
-    const definition = MARBLE_BY_ID.get(marble.id)
+    const definition = configById.get(marble.id) ?? DEFAULT_MARBLE_BY_ID.get(marble.id)
     if (!definition) continue
 
     const screen = projectToScreen(view, layout, marble.renderX, marble.renderY)

@@ -13,6 +13,7 @@ function statusLabel(standing: MarbleStanding): string {
   if (standing.status === 'dnf') return 'DNF'
   return 'RACING'
 }
+void statusLabel
 
 function MarbleDot({ standing }: { standing: MarbleStanding }) {
   return (
@@ -112,14 +113,14 @@ export function ResultsPanel({ snapshot }: ResultsPanelProps) {
                     className="flex items-center gap-3 rounded-xl border border-edge/50 bg-void/30 p-2.5 opacity-80"
                   >
                     <span className="w-6 shrink-0 text-center font-mono text-[0.62rem] text-dim">
-                      —
+                      -
                     </span>
                     <MarbleDot standing={standing} />
                     <span className="min-w-0 flex-1 truncate text-xs font-semibold text-mist">
                       {standing.name}
                     </span>
                     <span className="font-mono text-[0.62rem] tracking-widest text-dim uppercase">
-                      {statusLabel(standing)}
+                      DNF
                     </span>
                   </li>
                 ))}
@@ -131,6 +132,46 @@ export function ResultsPanel({ snapshot }: ResultsPanelProps) {
               </p>
             </div>
           )}
+
+          <div className="mt-4 border-t border-edge/50 pt-3">
+            <p className="eyebrow">History (last 20)</p>
+            {(!snapshot.history || snapshot.history.length === 0) ? (
+              <p className="mt-2 text-[0.68rem] text-dim">No races yet</p>
+            ) : (
+              <ul className="mt-2 space-y-2">
+                {snapshot.history.map((entry) => (
+                  <li key={entry.id} className="rounded-xl border border-edge/50 bg-void/30 p-2">
+                    <div className="flex justify-between text-[0.68rem] text-dim">
+                      <span>{entry.trackName} (seed {entry.seed})</span>
+                      <span>{entry.duration.toFixed(1)}s</span>
+                    </div>
+                    <div className="mt-1 text-[0.68rem] text-mist">
+                      {entry.results && entry.results.length > 0 ? (
+                        <div>
+                          {entry.results.slice(0, 3).map((r) => {
+                            const snap = entry.marbleSnapshots.find((m) => m.id === r.marbleId)
+                            return (
+                              <span key={r.marbleId} className="mr-2">
+                                P{r.place} {snap?.name ?? r.marbleId}
+                              </span>
+                            )
+                          })}
+                        </div>
+                      ) : null}
+                      {entry.dnfList && entry.dnfList.length > 0 && (
+                        <div className="mt-1 text-[0.62rem] text-dim">
+                          DNF: {entry.dnfList.map((d) => {
+                            const snap = entry.marbleSnapshots.find((m) => m.id === d.marbleId)
+                            return snap?.name ?? d.marbleId
+                          }).join(', ')}
+                        </div>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </div>
       )}
     </Panel>

@@ -43,6 +43,13 @@ function App() {
     controller.setTrack(selectedTrackId, next)
   }
 
+  const handleRaceAgain = () => {
+    // The controller draws the fresh seed itself and returns it, so the UI
+    // always shows the very seed the next race is staged on.
+    const next = controller.raceAgain()
+    setSeed(next)
+  }
+
   return (
     <div className="app-shell min-h-screen">
       <div className="app-grid" aria-hidden="true" />
@@ -66,6 +73,7 @@ function App() {
                 snapshot={snapshot}
                 onStart={controller.start}
                 onReset={controller.reset}
+                onRaceAgain={handleRaceAgain}
               />
               <TrackSelector
                 selectedId={selectedTrackId}
@@ -84,7 +92,7 @@ function App() {
           </div>
 
           <div className="mt-5 grid grid-cols-1 gap-5 md:grid-cols-2">
-            <MarbleGarage />
+            <MarbleGarage controller={controller} snapshot={snapshot} />
             <ResultsPanel snapshot={snapshot} />
           </div>
         </main>
