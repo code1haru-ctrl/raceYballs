@@ -126,7 +126,12 @@ export class RaceController {
     this.sim = new MarbleRaceSimulation(MARBLE_DEFINITIONS, track)
     this.recovery = new RecoveryManager(this.sim.track)
     this.wireCallbacks()
-    this.camera = new RaceCamera(track)
+    // The camera keeps its viewport across a track change. Replacing the
+    // camera instance would leave it unsized (0 x 0): the zoom would collapse
+    // to the minimum, the track would shrink into the middle of the canvas
+    // and every label would be projected off the left edge.
+    this.camera.setTrack(track)
+    this.syncSize()
     this.state = 'Ready'
     this.accumulator = 0
     this.lastPublishedSecond = -1

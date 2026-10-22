@@ -1,3 +1,8 @@
+import {
+  projectToScreen,
+  type CameraView,
+  type Viewport,
+} from '../camera/RaceCamera'
 import type { RaceCamera } from '../camera/RaceCamera'
 import { MARBLE_RADIUS } from '../config'
 import { MARBLES } from '../data'
@@ -62,6 +67,23 @@ const MONO_FONT = '"Cascadia Code", Consolas, ui-monospace, monospace'
 const MARBLE_BY_ID = new Map(MARBLES.map((marble) => [marble.id, marble]))
 
 /**
+ * Builds the canvas transform that maps world coordinates onto the canvas.
+ *
+ * The mapping is the exact inverse of `projectToScreen`: a world point drawn
+ * through this transform lands on the pixel `projectToScreen` reports, so
+ * labels, numbers and the marbles themselves always agree.
+ */
+export function applyWorldTransform(
+  ctx: CanvasRenderingContext2D,
+  view: CameraView,
+  viewport: Viewport,
+): void {
+  ctx.translate(viewport.width / 2, viewport.height / 2)
+  ctx.scale(view.scale, -view.scale)
+  ctx.translate(-view.x, -view.y)
+}
+
+/**
  * Draws one frame of the race with Canvas 2D.
  *
  * Positions come from the physics engine (already interpolated by the caller)
@@ -86,10 +108,7 @@ export function drawRace(
 
   const view = camera.getView()
   ctx.save()
-  ctx.translate(width / 2, height / 2)
-  ctx.scale(view.scale, -view.scale)
-  ctx.translate(-view.x, -view.y)
-
+  applyWorldTransform(ctx, view, { width, height })
   drawTrackInterior(ctx, sim.track, theme.accent, view.scale)
   drawStartAndFinish(ctx, sim.track, theme.accent, view.scale)
   drawObstacles(ctx, sim.track, theme.accent, view.scale)
@@ -366,7 +385,7 @@ function drawWorldLabels(
     const definition = MARBLE_BY_ID.get(marble.id)
     if (!definition) continue
 
-    const screen = camera.worldToScreen(marble.renderX, marble.renderY)
+    const screen = projectToScreen(view, layout, marble.renderX, marble.renderY)
     if (
       screen.x < -40 ||
       screen.x > width + 40 ||

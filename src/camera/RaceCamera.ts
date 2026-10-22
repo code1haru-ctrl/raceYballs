@@ -7,7 +7,34 @@ export interface CameraView {
   scale: number
 }
 
+/** The CSS-pixel size of the canvas the camera draws into. */
+export interface Viewport {
+  width: number
+  height: number
+}
+
 export type CameraMode = 'ready' | 'follow' | 'final'
+
+/**
+ * Projects a world point onto the canvas.
+ *
+ * This is the single definition of the world-to-screen mapping: the renderer
+ * builds the very same transform with `applyWorldTransform`, and every label,
+ * marker and HUD anchor is placed with this function. Keeping one formula
+ * guarantees that annotations can never drift away from the marbles they
+ * belong to.
+ */
+export function projectToScreen(
+  view: CameraView,
+  viewport: Viewport,
+  worldX: number,
+  worldY: number,
+): { x: number; y: number } {
+  return {
+    x: (worldX - view.x) * view.scale + viewport.width / 2,
+    y: viewport.height / 2 - (worldY - view.y) * view.scale,
+  }
+}
 
 /** How much world the camera may show when fully zoomed out. */
 const MAX_VISIBLE_WIDTH = 100
@@ -49,7 +76,7 @@ function clamp(value: number, min: number, max: number): number {
  * can never influence the physics simulation or finish order.
  */
 export class RaceCamera {
-  private readonly track: TrackData
+  private track: TrackData
   private view: CameraView = { x: 0, y: 0, scale: 8 }
   private width = 0
   private height = 0
@@ -65,9 +92,27 @@ export class RaceCamera {
     return { x: this.view.x, y: this.view.y, scale: this.view.scale }
   }
 
+  /** The canvas size the camera is currently framed for. */
+  get viewport(): Viewport {
+    return { width: this.width, height: this.height }
+  }
+
   /** Zoom above which individual marble name labels are worth drawing. */
   get labelThreshold(): number {
     return this.scaleMax * 0.85
+  }
+
+  /**
+   * Swaps the track the camera follows.
+   *
+   * The viewport (and therefore the zoom and the framing) is kept: replacing
+   * the camera instance would drop the canvas size and leave the camera
+   * unsized, which renders the track tiny and throws every label off the
+   * canvas. The new track only changes where the start view sits.
+   */
+  setTrack(track: TrackData): void {
+    this.track = track
+    this.snapToStart()
   }
 
   resize(width: number, height: number): void {
@@ -141,10 +186,7 @@ export class RaceCamera {
   }
 
   worldToScreen(worldX: number, worldY: number): { x: number; y: number } {
-    return {
-      x: (worldX - this.view.x) * this.view.scale + this.width / 2,
-      y: this.height / 2 - (worldY - this.view.y) * this.view.scale,
-    }
+    return projectToScreen(this.view, this.viewport, worldX, worldY)
   }
 
   /** Screen pixels per world unit — used for hairline widths in the renderer. */
