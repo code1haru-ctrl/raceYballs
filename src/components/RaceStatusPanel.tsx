@@ -28,7 +28,7 @@ function detailFor(snapshot: RaceSnapshot): string {
     case 'Ready':
       return 'Grid staged · physics paused until start'
     case 'Running':
-      return `${snapshot.finishedCount} of 10 finished · ${formatElapsed(snapshot.elapsedSec)} elapsed`
+      return `${snapshot.finishedCount} of ${snapshot.marbleCount} finished · ${formatElapsed(snapshot.elapsedSec)} elapsed`
     case 'Completed':
       return `${snapshot.finishedCount} finished · ${snapshot.dnfCount} DNF · results below`
   }
@@ -64,7 +64,7 @@ export function RaceStatusPanel({
         </div>
         <div className="stat">
           <dt>Field</dt>
-          <dd>10 marbles</dd>
+          <dd>{snapshot.marbleCount} marbles</dd>
         </div>
         <div className="stat">
           <dt>Speed</dt>

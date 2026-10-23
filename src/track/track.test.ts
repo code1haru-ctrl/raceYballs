@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { MARBLE_DIAMETER, MARBLE_RADIUS } from '../config'
+import { DEFAULT_MARBLES, MARBLE_DIAMETER, MARBLE_RADIUS } from '../config'
 import { MARBLES } from '../data'
 import { MarbleRaceSimulation } from '../physics/MarbleRaceSimulation'
 import { PROTOTYPE_TRACK, type TrackCircle, type TrackRect } from './track'
@@ -34,8 +34,8 @@ function circleOverlapsCircle(
 }
 
 describe('track data', () => {
-  it('defines exactly ten start positions', () => {
-    expect(PROTOTYPE_TRACK.startPositions).toHaveLength(10)
+  it('defines the default 10 start positions', () => {
+    expect(PROTOTYPE_TRACK.startPositions).toHaveLength(DEFAULT_MARBLES)
   })
 
   it('exposes bounds, walls, obstacles, start zone, finish line and centerline', () => {
@@ -60,12 +60,17 @@ describe('track data', () => {
 })
 
 describe('marble spawning', () => {
-  const sim = new MarbleRaceSimulation(MARBLES.map((marble) => ({ id: marble.id })))
+  const defs = MARBLES.slice(0, DEFAULT_MARBLES).map((marble) => ({
+    id: marble.id,
+  }))
+  const sim = new MarbleRaceSimulation(defs)
   const track = PROTOTYPE_TRACK
 
-  it('creates exactly 10 marbles for the 10 marble definitions', () => {
-    expect(sim.marbles).toHaveLength(10)
-    expect(sim.marbles.map((marble) => marble.id)).toEqual(MARBLES.map((m) => m.id))
+  it('creates one marble per active definition', () => {
+    expect(sim.marbles).toHaveLength(DEFAULT_MARBLES)
+    expect(sim.marbles.map((marble) => marble.id)).toEqual(
+      defs.map((marble) => marble.id),
+    )
   })
 
   it('spawns no two marbles overlapping (all pairs at least a diameter apart)', () => {

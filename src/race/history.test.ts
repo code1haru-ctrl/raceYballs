@@ -8,6 +8,7 @@ function makeEntry(id: string, overrides: Partial<RaceHistoryEntry> = {}): RaceH
     trackId: 'neon-circuit',
     trackName: 'Neon Circuit',
     seed: 1234,
+    marbleCount: 2,
     results: [{ place: 1, marbleId: 'cyan-comet', timeSec: 4.2 }],
     dnfList: [],
     duration: 12.5,

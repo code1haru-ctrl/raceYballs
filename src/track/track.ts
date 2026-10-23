@@ -2,7 +2,7 @@
  * Track data for the Phase 2 vertical prototype.
  *
  * The track is pure data: bounds, walls, obstacles, the start zone with its
- * ten start positions, the finish line, and a centerline for later phases.
+ * start positions, the finish line, and a centerline for later phases.
  * World creation in the physics module only reads this object — it never
  * hard-codes geometry of its own.
  *
@@ -72,7 +72,7 @@ export interface TrackData {
   obstacles: TrackObstacles
   startLineY: number
   startZone: TrackBounds
-  /** Exactly ten grid slots, ordered as the marbles are listed. */
+  /** One grid slot per active marble, ordered as the marbles are listed. */
   startPositions: MarbleSlot[]
   finishLine: TrackFinishLine
   /**

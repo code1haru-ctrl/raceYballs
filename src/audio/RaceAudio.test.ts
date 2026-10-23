@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { FIXED_TIME_STEP, HARD_RACE_LIMIT_S } from '../config'
+import {
+  DEFAULT_MARBLES,
+  FIXED_TIME_STEP,
+  HARD_RACE_LIMIT_S,
+} from '../config'
 import { MARBLES } from '../data'
 import { MarbleRaceSimulation } from '../physics/MarbleRaceSimulation'
 import { RaceController } from '../race/RaceController'
@@ -104,7 +108,7 @@ describe('race audio integration', () => {
 
   it('mutes contacts caused by a recovery teleport', () => {
     const sim = new MarbleRaceSimulation(
-      MARBLES.map((marble) => ({ id: marble.id })),
+      MARBLES.slice(0, DEFAULT_MARBLES).map((marble) => ({ id: marble.id })),
       buildTrack('neon-circuit', DEFAULT_SEEDS['neon-circuit']),
     )
     const teleportedId = sim.marbles[0].id

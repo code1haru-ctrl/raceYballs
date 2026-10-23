@@ -1,4 +1,13 @@
-import { Gauge, Lock, Volume2, VolumeX } from 'lucide-react'
+import {
+  Gauge,
+  Lock,
+  Minus,
+  Plus,
+  Users,
+  Volume2,
+  VolumeX,
+} from 'lucide-react'
+import { MAX_MARBLES, MIN_MARBLES } from '../config'
 import { formatSpeed } from '../race/format'
 import { MAX_SPEED, MIN_SPEED, SPEED_STEP } from '../race/RaceController'
 import { Panel } from './Panel'
@@ -6,6 +15,9 @@ import { Panel } from './Panel'
 interface ControlsPanelProps {
   speed: number
   onSpeedChange: (value: number) => void
+  marbleCount: number
+  onMarbleCountChange: (count: number) => void
+  disabled: boolean
   muted: boolean
   volume: number
   onToggleMute: () => void
@@ -15,6 +27,9 @@ interface ControlsPanelProps {
 export function ControlsPanel({
   speed,
   onSpeedChange,
+  marbleCount,
+  onMarbleCountChange,
+  disabled,
   muted,
   volume,
   onToggleMute,
@@ -30,6 +45,50 @@ export function ControlsPanel({
     >
       <div className="space-y-5">
         <div>
+          <div className="flex items-center justify-between gap-3">
+            <span className="field-label">
+              <Users className="size-3.5 text-neon-magenta" aria-hidden="true" />
+              Marble field
+            </span>
+            <span className="font-mono text-xs text-ink">
+              {marbleCount} active · {MAX_MARBLES - marbleCount} reserve
+            </span>
+          </div>
+          <div className="mt-2.5 flex items-center gap-2">
+            <button
+              type="button"
+              className="icon-btn size-9 shrink-0"
+              onClick={() => onMarbleCountChange(marbleCount - 1)}
+              disabled={disabled || marbleCount <= MIN_MARBLES}
+              aria-label="Fewer marbles"
+              title="Fewer marbles"
+            >
+              <Minus className="size-4" aria-hidden="true" />
+            </button>
+            <div
+              className="flex h-9 flex-1 items-center justify-center rounded-xl border border-edge/60 bg-void/40 font-mono text-sm text-ink"
+              aria-live="polite"
+            >
+              {marbleCount} / {MAX_MARBLES}
+            </div>
+            <button
+              type="button"
+              className="icon-btn size-9 shrink-0"
+              onClick={() => onMarbleCountChange(marbleCount + 1)}
+              disabled={disabled || marbleCount >= MAX_MARBLES}
+              aria-label="More marbles"
+              title="More marbles"
+            >
+              <Plus className="size-4" aria-hidden="true" />
+            </button>
+          </div>
+          <p className="mt-1.5 text-[0.62rem] leading-relaxed text-dim">
+            Choose 2–20 marbles. The count can only change while Ready; the
+            current track and seed stay the same.
+          </p>
+        </div>
+
+        <div className="border-t border-edge/50 pt-4">
           <div className="flex items-center justify-between gap-3">
             <label htmlFor="sim-speed" className="field-label">
               <Gauge className="size-3.5 text-neon-cyan" aria-hidden="true" />

@@ -8,7 +8,12 @@
  * single copy of every clearance number.
  */
 
-import { MARBLE_DIAMETER, MARBLE_RADIUS } from '../config'
+import {
+  MARBLE_DIAMETER,
+  MARBLE_RADIUS,
+  MAX_MARBLES,
+  MIN_MARBLES,
+} from '../config'
 import {
   CENTERLINE_CLEARANCE_D,
   FINISH_MIN_OBSTACLE_D,
@@ -52,10 +57,17 @@ function rectCircleSeparatedBy(
 }
 
 /**
- * Checks bounds, the ten-slot start grid, obstacle spacing along the
- * centerline, centerline clearance and an unobstructed finish.
+ * Checks bounds, the start grid for the actual marble count, obstacle spacing
+ * along the centerline, centerline clearance and an unobstructed finish.
+ *
+ * `expectedStartCount` defaults to the grid found on the track. The generator
+ * passes the requested marble count so a grid built for a different count is
+ * rejected instead of silently racing fewer marbles.
  */
-export function validateTrack(track: TrackData): ValidationReport {
+export function validateTrack(
+  track: TrackData,
+  expectedStartCount: number = track.startPositions.length,
+): ValidationReport {
   const violations: string[] = []
   const { width, height } = track
 
@@ -85,9 +97,18 @@ export function validateTrack(track: TrackData): ValidationReport {
     violations.push('finish line lies outside the playfield')
   }
 
-  // --- Start positions.
-  if (track.startPositions.length !== 10) {
-    violations.push(`expected 10 start positions, found ${track.startPositions.length}`)
+  // --- Start positions for the actual count.
+  if (
+    track.startPositions.length < MIN_MARBLES ||
+    track.startPositions.length > MAX_MARBLES
+  ) {
+    violations.push(
+      `expected ${MIN_MARBLES}-${MAX_MARBLES} start positions, found ${track.startPositions.length}`,
+    )
+  } else if (track.startPositions.length !== expectedStartCount) {
+    violations.push(
+      `expected ${expectedStartCount} start positions, found ${track.startPositions.length}`,
+    )
   }
   const minPair = START_MIN_PAIR_D * D
   const minWall = START_MIN_WALL_D * D
@@ -101,6 +122,14 @@ export function validateTrack(track: TrackData): ValidationReport {
       a.y + MARBLE_RADIUS > track.bounds.maxY
     ) {
       violations.push(`start slot ${i} breaches the playfield bounds`)
+    }
+    if (
+      a.x < track.startZone.minX ||
+      a.x > track.startZone.maxX ||
+      a.y < track.startZone.minY ||
+      a.y > track.startZone.maxY
+    ) {
+      violations.push(`start slot ${i} is outside the start zone`)
     }
     for (const wall of track.walls) {
       if (circleOverlapsRect(a.x, a.y, MARBLE_RADIUS, wall)) {

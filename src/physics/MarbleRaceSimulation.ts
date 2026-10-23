@@ -94,9 +94,9 @@ export interface MarbleCollisionEvent {
 }
 
 /**
- * Owns the Planck.js world for one race: static track geometry, ten dynamic
- * marbles, the finish-line sensor, finish-order recording and the Phase 3B
- * DNF rules. Positions come from the physics engine only; nothing in here
+ * Owns the Planck.js world for one race: static track geometry, one dynamic
+ * marble per definition, the finish-line sensor, finish-order recording and
+ * the Phase 3B DNF rules. Positions come from the physics engine only; nothing in here
  * reads from the renderer, the camera, React, the DOM or Canvas.
  */
 export class MarbleRaceSimulation {
@@ -124,6 +124,11 @@ export class MarbleRaceSimulation {
   private collisionSilencedUntil: number[] = []
 
   constructor(defs: readonly MarbleDefinition[], track: TrackData = PROTOTYPE_TRACK) {
+    if (defs.length > track.startPositions.length) {
+      throw new Error(
+        `track ${track.id} has ${track.startPositions.length} start slots for ${defs.length} marbles`,
+      )
+    }
     this.track = track
     this.world = this.buildWorld(defs)
     for (let i = 0; i < defs.length; i += 1) {

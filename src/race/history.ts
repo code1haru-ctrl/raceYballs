@@ -1,4 +1,3 @@
-import { MARBLES } from '../data'
 import type {
   HistoryDnf,
   MarbleSnapshot,
@@ -59,10 +58,3 @@ function copyEntry(entry: RaceHistoryEntry): RaceHistoryEntry {
     marbleSnapshots: entry.marbleSnapshots.map((marble) => ({ ...marble })),
   }
 }
-
-/** Default marble list, used when a race has no customisation yet. */
-export const DEFAULT_HISTORY_MARBLES: HistoryMarble[] = MARBLES.map((marble) => ({
-  id: marble.id,
-  name: marble.name,
-  color: marble.color,
-}))

@@ -81,3 +81,10 @@ export const COLLISION_SILENCE_AFTER_TELEPORT_S = 0.35
  */
 export const OVERTAKE_MIN_PROGRESS_MARGIN = MARBLE_DIAMETER * 0.75
 export const OVERTAKE_HOLD_MS = 220
+
+/**
+ * Phase 6 — variable marble count.
+ */
+export const MIN_MARBLES = 2
+export const MAX_MARBLES = 20
+export const DEFAULT_MARBLES = 10

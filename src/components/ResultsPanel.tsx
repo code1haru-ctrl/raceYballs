@@ -142,7 +142,10 @@ export function ResultsPanel({ snapshot }: ResultsPanelProps) {
                 {snapshot.history.map((entry) => (
                   <li key={entry.id} className="rounded-xl border border-edge/50 bg-void/30 p-2">
                     <div className="flex justify-between text-[0.68rem] text-dim">
-                      <span>{entry.trackName} (seed {entry.seed})</span>
+                      <span>
+                        {entry.trackName} (seed {entry.seed}) ·{' '}
+                        {entry.marbleCount} marbles
+                      </span>
                       <span>{entry.duration.toFixed(1)}s</span>
                     </div>
                     <div className="mt-1 text-[0.68rem] text-mist">

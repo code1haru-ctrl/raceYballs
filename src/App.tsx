@@ -122,6 +122,9 @@ function App() {
                 <ControlsPanel
                   speed={snapshot.speed}
                   onSpeedChange={controller.setSpeed}
+                  marbleCount={snapshot.marbleCount}
+                  onMarbleCountChange={controller.setMarbleCount}
+                  disabled={snapshot.state !== 'Ready'}
                   muted={muted}
                   volume={volume}
                   onToggleMute={handleToggleMute}

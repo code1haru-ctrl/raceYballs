@@ -1,10 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { FIXED_TIME_STEP, HARD_RACE_LIMIT_S } from '../config'
+import {
+  DEFAULT_MARBLES,
+  FIXED_TIME_STEP,
+  HARD_RACE_LIMIT_S,
+} from '../config'
 import { MARBLES } from '../data'
 import type { TrackData } from '../track/track'
 import { MarbleRaceSimulation, type MarbleState } from './MarbleRaceSimulation'
 
-const DEFS = MARBLES.map((marble) => ({ id: marble.id }))
+const DEFS = MARBLES.slice(0, DEFAULT_MARBLES).map((marble) => ({ id: marble.id }))
 /** Long enough for the hard race limit to elapse plus margin. */
 const FULL_RACE_STEPS = Math.ceil((HARD_RACE_LIMIT_S + 5) / FIXED_TIME_STEP)
 

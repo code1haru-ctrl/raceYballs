@@ -148,7 +148,7 @@ export function validateMarbleColor(
 }
 
 /**
- * The customisation of the ten marbles.
+ * The customisation of all 20 marble slots.
  *
  * The store is deliberately independent from the physics and the track: it
  * only ever holds names and colors, and it never rebuilds a world. The

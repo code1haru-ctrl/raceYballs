@@ -1,6 +1,11 @@
 /* Temporary Phase 2 verification script (headless). Not part of the app. */
 import { RaceCamera } from './src/camera/RaceCamera'
-import { FIXED_TIME_STEP, MARBLE_RADIUS, TEMP_SAFETY_LIMIT_S } from './src/config'
+import {
+  DEFAULT_MARBLES,
+  FIXED_TIME_STEP,
+  HARD_RACE_LIMIT_S,
+  MARBLE_RADIUS,
+} from './src/config'
 import { MARBLES } from './src/data'
 import { MarbleRaceSimulation } from './src/physics/MarbleRaceSimulation'
 import { PROTOTYPE_TRACK } from './src/track/track'
@@ -12,10 +17,15 @@ function check(name: string, ok: boolean, detail = ''): void {
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? ` — ${detail}` : ''}`)
 }
 
-const sim = new MarbleRaceSimulation(MARBLES.map((m) => ({ id: m.id })))
+const DEFS = MARBLES.slice(0, DEFAULT_MARBLES).map((m) => ({ id: m.id }))
+const sim = new MarbleRaceSimulation(DEFS)
 const track = PROTOTYPE_TRACK
 
-check('exactly 10 marbles', sim.marbles.length === 10, `${sim.marbles.length}`)
+check(
+  `exactly ${DEFAULT_MARBLES} marbles`,
+  sim.marbles.length === DEFAULT_MARBLES,
+  `${sim.marbles.length}`,
+)
 
 const initialPositions = sim.marbles
   .map((m) => `${m.x.toFixed(4)},${m.y.toFixed(4)}`)
@@ -57,7 +67,7 @@ for (const marble of sim.marbles) {
   const s = camera.worldToScreen(marble.x, marble.y)
   if (s.x < 0 || s.x > 700 || s.y < 0 || s.y > 520) readyViewOk = false
 }
-check('ready camera shows all 10 marbles', readyViewOk)
+check(`ready camera shows all ${DEFAULT_MARBLES} marbles`, readyViewOk)
 
 const beforeCamera = sim.marbles
   .map((m) => `${m.x.toFixed(6)},${m.y.toFixed(6)},${m.prevX.toFixed(6)},${m.prevY.toFixed(6)}`)
@@ -87,7 +97,7 @@ let outOfBounds = 0
 let leaderOffScreen = 0
 let bunchedOffScreen = 0
 let cameraWentInvalid = 0
-const maxSteps = Math.ceil((TEMP_SAFETY_LIMIT_S + 5) / FIXED_TIME_STEP)
+const maxSteps = Math.ceil((HARD_RACE_LIMIT_S + 5) / FIXED_TIME_STEP)
 
 while (!completed && steps < maxSteps) {
   sim.step(FIXED_TIME_STEP)
@@ -153,9 +163,12 @@ check(
 )
 
 const finished = sim.marbles.filter((m) => m.status === 'finished')
-const unfinished = sim.marbles.filter((m) => m.status === 'unfinished')
-check('all 10 marbles accounted for', finished.length + unfinished.length === 10,
-  `${finished.length} finished, ${unfinished.length} unfinished`)
+const dnf = sim.marbles.filter((m) => m.status === 'dnf')
+check(
+  `all ${sim.marbles.length} marbles accounted for`,
+  finished.length + dnf.length === sim.marbles.length,
+  `${finished.length} finished, ${dnf.length} DNF`,
+)
 check(
   'finish events recorded in order',
   finishEvents.length === finished.length &&
@@ -167,13 +180,13 @@ const timesIncreasing = times.every((time, index) => index === 0 || time > times
 check('finish times strictly increase', timesIncreasing)
 
 // 4. reset restores the grid and can race again
-sim.reset(MARBLES.map((m) => ({ id: m.id })))
+sim.reset(DEFS)
 camera.reset()
 const resetPositions = sim.marbles
   .map((m) => `${m.x.toFixed(4)},${m.y.toFixed(4)}`)
   .join('|')
 check('reset restores spawn positions', resetPositions === initialPositions)
-check('reset clears records', sim.finishedCount() === 0 && sim.unfinishedCount() === 0 && sim.elapsed() === 0)
+check('reset clears records', sim.finishedCount() === 0 && sim.dnfCount() === 0 && sim.elapsed() === 0)
 
 let completedAgain = false
 sim.onComplete = () => {
@@ -188,8 +201,8 @@ check('second race also completes (no stale state)', completedAgain,
   `${steps} steps / ${(steps * FIXED_TIME_STEP).toFixed(1)}s sim`)
 
 // 5. determinism: identical inputs and step counts produce identical states
-const a = new MarbleRaceSimulation(MARBLES.map((m) => ({ id: m.id })))
-const b = new MarbleRaceSimulation(MARBLES.map((m) => ({ id: m.id })))
+const a = new MarbleRaceSimulation(DEFS)
+const b = new MarbleRaceSimulation(DEFS)
 for (let i = 0; i < 600; i++) a.step(FIXED_TIME_STEP)
 for (let i = 0; i < 600; i++) b.step(FIXED_TIME_STEP)
 const deterministic = a.marbles.every(

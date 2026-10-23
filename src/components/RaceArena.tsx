@@ -11,11 +11,12 @@ interface RaceArenaProps {
 }
 
 function statusLine(snapshot: RaceSnapshot): string {
+  const count = snapshot.marbleCount
   switch (snapshot.state) {
     case 'Ready':
-      return 'Ten marbles are staged at the starting grid. The camera shows the start area and physics is paused.'
+      return `${count} marbles are staged at the starting grid. The camera shows the start area and physics is paused.`
     case 'Running':
-      return `Race in progress. ${snapshot.finishedCount} of 10 marbles have crossed the finish line.`
+      return `Race in progress. ${snapshot.finishedCount} of ${count} marbles have crossed the finish line.`
     case 'Completed':
       return `Race complete. ${snapshot.finishedCount} finished and ${snapshot.dnfCount} DNF.`
   }
@@ -46,10 +47,10 @@ export function RaceArena({ track, controller, snapshot }: RaceArenaProps) {
 
   const badgeLabel =
     snapshot.state === 'Ready'
-      ? '10 marbles · staged'
+      ? `${snapshot.marbleCount} marbles · staged`
       : snapshot.state === 'Running'
-        ? `racing · ${snapshot.finishedCount}/10 home`
-        : `complete · ${snapshot.finishedCount}/10 home`
+        ? `racing · ${snapshot.finishedCount}/${snapshot.marbleCount} home`
+        : `complete · ${snapshot.finishedCount}/${snapshot.marbleCount} home`
 
   return (
     <section aria-labelledby="arena-heading" className="panel p-4 sm:p-5">

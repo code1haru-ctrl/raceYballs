@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  DEFAULT_MARBLES,
   FIXED_TIME_STEP,
   HARD_RACE_LIMIT_S,
   MAX_RECOVERY_ATTEMPTS,
@@ -223,10 +224,12 @@ describe('hard race limit', () => {
 })
 
 describe('shipped tracks', () => {
-  const defs: MarbleDefinition[] = MARBLES.map((marble) => ({ id: marble.id }))
+  const defs: MarbleDefinition[] = MARBLES.slice(0, DEFAULT_MARBLES).map(
+    (marble) => ({ id: marble.id }),
+  )
 
   for (const trackId of ['neon-circuit', 'chaos-canyon', 'gravity-gauntlet'] as const) {
-    it(`${trackId} still finishes all ten marbles with recovery enabled`, () => {
+    it(`${trackId} still finishes all ${DEFAULT_MARBLES} marbles with recovery enabled`, () => {
       const track = buildTrack(trackId, DEFAULT_SEEDS[trackId])
       const sim = new MarbleRaceSimulation(defs, track)
       const recovery = new RecoveryManager(track)
@@ -240,7 +243,7 @@ describe('shipped tracks', () => {
 
       // The recovery must never retire a marble on a shipped track.
       expect(sim.dnfCount()).toBe(0)
-      expect(sim.finishedCount()).toBe(10)
+      expect(sim.finishedCount()).toBe(DEFAULT_MARBLES)
       expect(sim.isCompleted()).toBe(true)
     })
   }

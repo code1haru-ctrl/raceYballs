@@ -1,5 +1,10 @@
 import { RaceCamera, type CameraMode } from '../camera/RaceCamera'
-import { FIXED_TIME_STEP } from '../config'
+import {
+  DEFAULT_MARBLES,
+  FIXED_TIME_STEP,
+  MAX_MARBLES,
+  MIN_MARBLES,
+} from '../config'
 import { MARBLES, type TrackId, TRACKS } from '../data'
 import {
   MarbleRaceSimulation,
@@ -48,9 +53,10 @@ const MAX_FRAME_DELTA = 0.1
 /** Catch-up budget: drops excess backlog after long hitches instead of spiralling. */
 const MAX_STEPS_PER_FRAME = 12
 
-const MARBLE_DEFINITIONS: MarbleDefinition[] = MARBLES.map((marble) => ({
-  id: marble.id,
-}))
+/** Builds the race definitions for the first `count` marble slots. */
+function definitionsFor(count: number): MarbleDefinition[] {
+  return MARBLES.slice(0, count).map((marble) => ({ id: marble.id }))
+}
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max)
@@ -90,6 +96,8 @@ export class RaceController implements RaceEventSource {
   private accent = '#2ce9ff'
   private trackId: TrackId = 'neon-circuit'
   private seed = DEFAULT_SEEDS['neon-circuit']
+  /** Active marble slots (2..20); the rest stay in the garage as reserves. */
+  private marbleCount = DEFAULT_MARBLES
 
   /**
    * The customisation lives in its own store, completely apart from the
@@ -108,8 +116,8 @@ export class RaceController implements RaceEventSource {
 
   constructor() {
     this.sim = new MarbleRaceSimulation(
-      MARBLE_DEFINITIONS,
-      buildTrack(this.trackId, this.seed),
+      definitionsFor(this.marbleCount),
+      buildTrack(this.trackId, this.seed, this.marbleCount),
     )
     this.camera = new RaceCamera(this.sim.track)
     this.recovery = new RecoveryManager(this.sim.track)
@@ -280,6 +288,63 @@ export class RaceController implements RaceEventSource {
   }
 
   /**
+   * Replaces the physics world and start state without starting a new loop.
+   *
+   * The camera object is kept (and therefore keeps its viewport); it only
+   * gets the new track and, when asked, snaps back to the start view. Track,
+   * seed and marble customisation are never touched here.
+   */
+  private rebuildWorld(
+    track: TrackData,
+    silence: SilenceReason,
+    resetCamera: boolean,
+  ): void {
+    this.sim = new MarbleRaceSimulation(definitionsFor(this.marbleCount), track)
+    this.recovery = new RecoveryManager(this.sim.track)
+    this.wireCallbacks()
+    this.camera.setTrack(track)
+    this.syncSize()
+    this.path = new CenterlinePath(track.centerline)
+    this.overtakes.reset()
+    this.state = 'Ready'
+    this.accumulator = 0
+    this.lastPublishedSecond = -1
+    this.dnfDetails.clear()
+    if (resetCamera) this.camera.reset()
+    this.emitSilence(silence)
+    this.publish()
+  }
+
+  /**
+   * Changes how many of the 20 marble slots take part in the race.
+   *
+   * Only allowed while Ready. The count is rejected outside 2..20, and the
+   * world is rebuilt for the same track and seed so only the start grid and
+   * the active field change. Existing name/color edits are kept because the
+   * customisation store is independent from the physics world.
+   */
+  setMarbleCount = (count: number): MarbleEditResult => {
+    if (this.state !== 'Ready') {
+      return { ok: false, error: 'Marble count can only be changed while Ready' }
+    }
+    if (!Number.isInteger(count) || count < MIN_MARBLES || count > MAX_MARBLES) {
+      return {
+        ok: false,
+        error: `Marble count must be a whole number from ${MIN_MARBLES} to ${MAX_MARBLES}`,
+      }
+    }
+    if (count === this.marbleCount) return { ok: true }
+
+    this.marbleCount = count
+    this.rebuildWorld(
+      buildTrack(this.trackId, this.seed, this.marbleCount),
+      'track-change',
+      true,
+    )
+    return { ok: true }
+  }
+
+  /**
    * Loads a track layout generated from `(trackId, seed)`.
    *
    * Only allowed while the race is Ready — a running race is never rebuilt
@@ -290,24 +355,11 @@ export class RaceController implements RaceEventSource {
     if (this.state === 'Running') return
     this.trackId = trackId
     this.seed = seed
-    const track: TrackData = buildTrack(trackId, seed)
-    this.sim = new MarbleRaceSimulation(MARBLE_DEFINITIONS, track)
-    this.recovery = new RecoveryManager(this.sim.track)
-    this.wireCallbacks()
-    // The camera keeps its viewport across a track change. Replacing the
-    // camera instance would leave it unsized (0 x 0): the zoom would collapse
-    // to the minimum, the track would shrink into the middle of the canvas
-    // and every label would be projected off the left edge.
-    this.camera.setTrack(track)
-    this.syncSize()
-    this.path = new CenterlinePath(track.centerline)
-    this.overtakes.reset()
-    this.state = 'Ready'
-    this.accumulator = 0
-    this.lastPublishedSecond = -1
-    this.dnfDetails.clear()
-    this.emitSilence('track-change')
-    this.publish()
+    this.rebuildWorld(
+      buildTrack(trackId, seed, this.marbleCount),
+      'track-change',
+      false,
+    )
   }
 
   /** Starts the simulation exactly once, and only from the Ready state. */
@@ -330,7 +382,7 @@ export class RaceController implements RaceEventSource {
    * kept: a reset is the same race, staged again.
    */
   reset = (): void => {
-    this.sim.reset(MARBLE_DEFINITIONS)
+    this.sim.reset(definitionsFor(this.marbleCount))
     this.recovery.reset()
     this.state = 'Ready'
     this.accumulator = 0
@@ -354,21 +406,11 @@ export class RaceController implements RaceEventSource {
     if (this.state !== 'Completed') return this.seed
     const nextSeed = this.pickSeedDifferentFromCurrent()
     this.seed = nextSeed
-    const track: TrackData = buildTrack(this.trackId, nextSeed)
-    this.sim = new MarbleRaceSimulation(MARBLE_DEFINITIONS, track)
-    this.recovery = new RecoveryManager(this.sim.track)
-    this.wireCallbacks()
-    this.camera.setTrack(track)
-    this.syncSize()
-    this.path = new CenterlinePath(track.centerline)
-    this.overtakes.reset()
-    this.state = 'Ready'
-    this.accumulator = 0
-    this.lastPublishedSecond = -1
-    this.dnfDetails.clear()
-    this.camera.reset()
-    this.emitSilence('race-again')
-    this.publish()
+    this.rebuildWorld(
+      buildTrack(this.trackId, nextSeed, this.marbleCount),
+      'race-again',
+      true,
+    )
     return nextSeed
   }
 
@@ -473,6 +515,7 @@ export class RaceController implements RaceEventSource {
         elapsedSec: this.sim.elapsed(),
         finishedCount: this.sim.finishedCount(),
         dnfCount: this.sim.dnfCount(),
+        marbleCount: this.marbleCount,
         speedLabel: formatSpeed(this.speed),
       },
       this.customization.list(),
@@ -571,14 +614,18 @@ export class RaceController implements RaceEventSource {
     results.sort((a, b) => a.place - b.place)
 
     // The names and colors are frozen here: a later edit of a marble must
-    // never rewrite a race that is already in the history.
-    const marbleSnapshots: MarbleSnapshot[] = this.customization.list()
+    // never rewrite a race that is already in the history. Only the active
+    // marbles of this race are stored.
+    const marbleSnapshots: MarbleSnapshot[] = this.customization
+      .list()
+      .slice(0, this.marbleCount)
 
     this.history.add({
       id: `race-${this.raceSerial}`,
       trackId: this.trackId,
       trackName: TRACKS.find((track) => track.id === this.trackId)?.name ?? this.trackId,
       seed: this.seed,
+      marbleCount: this.marbleCount,
       results,
       dnfList,
       duration: this.sim.elapsed(),
@@ -641,10 +688,11 @@ export class RaceController implements RaceEventSource {
       trackName:
         TRACKS.find((track) => track.id === this.trackId)?.name ?? this.trackId,
       seed: this.seed,
+      marbleCount: this.marbleCount,
       results,
       standings,
-      /** The marble customisation currently in use. */
-      marbles: configs,
+      /** The active marbles only; the garage reads all 20 from the controller. */
+      marbles: configs.slice(0, this.marbleCount),
       /** The last completed races, newest first. */
       history: this.history.getAll(),
     }

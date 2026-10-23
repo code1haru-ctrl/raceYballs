@@ -81,18 +81,26 @@ export function MarbleGarage({ controller, snapshot }: MarbleGarageProps) {
       icon={
         <Palette className="size-4 text-neon-magenta" aria-hidden="true" />
       }
-      action={<span className="badge">10 marbles</span>}
+      action={
+        <span className="badge">
+          {snapshot.marbleCount} active · {configs.length - snapshot.marbleCount} reserve
+        </span>
+      }
     >
       <div className="space-y-2">
-        {configs.map((marble) => (
+        {configs.map((marble, index) => {
+          const active = index < snapshot.marbleCount
+          return (
           <div
             key={marble.id}
-            className="flex items-center gap-2 rounded-xl border border-edge/60 bg-void/40 p-2"
+            className={`flex items-center gap-2 rounded-xl border border-edge/60 bg-void/40 p-2 ${
+              active ? '' : 'opacity-45'
+            }`}
           >
             <span
               className="marble-swatch shrink-0"
               style={{ '--marble': marble.color } as CSSProperties}
-              title={marble.name}
+              title={active ? marble.name : `${marble.name} (reserve)`}
             />
             {editingId === marble.id ? (
               <div className="flex flex-1 flex-col gap-1">
@@ -148,7 +156,8 @@ export function MarbleGarage({ controller, snapshot }: MarbleGarageProps) {
               </>
             )}
           </div>
-        ))}
+          )
+        })}
       </div>
 
       <button

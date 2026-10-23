@@ -25,6 +25,7 @@ export interface RenderStatusInfo {
   elapsedSec: number
   finishedCount: number
   dnfCount: number
+  marbleCount: number
   speedLabel: string
 }
 
@@ -385,7 +386,14 @@ function drawWorldLabels(
     ctx.fillText('FINISH', finish.x, finish.y)
   }
 
-  const showNames = view.scale >= camera.labelThreshold
+  // A crowded 20-marble field hides name tags until the camera has zoomed
+  // past the normal label threshold, and uses a slightly smaller font. The
+  // numbered discs stay so every marble is still identifiable.
+  const crowded = sim.marbles.length > 14
+  const showNames =
+    view.scale >= camera.labelThreshold &&
+    (!crowded || view.scale >= camera.labelThreshold * 1.2)
+  const nameFontSize = crowded ? 9 : 10
 
   for (let index = 0; index < sim.marbles.length; index += 1) {
     const marble = sim.marbles[index]
@@ -413,7 +421,7 @@ function drawWorldLabels(
     }
 
     if (showNames) {
-      ctx.font = `500 10px ${MONO_FONT}`
+      ctx.font = `500 ${nameFontSize}px ${MONO_FONT}`
       ctx.textAlign = 'center'
       ctx.textBaseline = 'top'
       ctx.shadowColor = 'rgba(0, 0, 0, 0.85)'
@@ -440,11 +448,11 @@ function drawHud(
       dotColor = '#2ce9ff'
       break
     case 'Running':
-      text = `RACING · ${status.finishedCount}/10 FINISHED · ${status.elapsedSec.toFixed(1)}S · ${status.speedLabel}`
+      text = `RACING · ${status.finishedCount}/${status.marbleCount} FINISHED · ${status.elapsedSec.toFixed(1)}S · ${status.speedLabel}`
       dotColor = theme.accent
       break
     case 'Completed':
-      text = `COMPLETED · ${status.finishedCount} FINISHED · ${status.dnfCount} DNF`
+      text = `COMPLETED · ${status.finishedCount}/${status.marbleCount} FINISHED · ${status.dnfCount} DNF`
       dotColor = '#8df25c'
       break
   }

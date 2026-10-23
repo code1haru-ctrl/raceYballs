@@ -2,7 +2,7 @@
  * Seeded, validated track generation (Phase 3A).
  *
  * Every track shares one fixed frame — interior bounds, four boundary walls,
- * the ten-slot starting grid, the start line, the finish line and the
+ * the variable-size starting grid, the start line, the finish line and the
  * centerline. Seeding may only vary the interior *obstacles* (angled bars and
  * pegs); it can never move a wall, the start zone, the finish line or the
  * centerline. A layout is accepted only if it passes `validateTrack`; the
@@ -14,6 +14,12 @@
  * clear of obstacles while leaving the rest of the course lively.
  */
 
+import {
+  DEFAULT_MARBLES,
+  MARBLE_DIAMETER,
+  MAX_MARBLES,
+  MIN_MARBLES,
+} from '../config'
 import type { TrackId } from '../data'
 import { mulberry32, randomInRange, randomIntInRange, type RandomSource } from './rng'
 import { normalizeSeed } from './seed'
@@ -42,19 +48,85 @@ export const DEFAULT_SEEDS: Record<TrackId, number> = {
   'gravity-gauntlet': 1,
 }
 
-/** Fixed staggered grid: four columns x two/three rows. */
-export const START_POSITIONS = [
-  { x: 4, y: 127.5 },
-  { x: 13, y: 127.5 },
-  { x: 22, y: 127.5 },
-  { x: 31, y: 127.5 },
-  { x: 4, y: 133.5 },
-  { x: 13, y: 133.5 },
-  { x: 22, y: 133.5 },
-  { x: 31, y: 133.5 },
-  { x: 4, y: 139.5 },
-  { x: 13, y: 139.5 },
-]
+/** Y of the start line and the bottom of the shared start zone. */
+export const START_LINE_Y = 124
+
+/** Maximum number of marbles in a row (a row of four is the staggered one). */
+const START_GRID_LANES = 5
+/** Centre-to-wall margin for the widest row, in world units. */
+const START_GRID_MARGIN = START_MIN_WALL_D * MARBLE_DIAMETER + 0.8
+/**
+ * How far the first row sits above the start line. This keeps the widest row
+ * at least 1.5D above the tallest rotated obstacle on every seeded layout.
+ */
+const START_GRID_BOTTOM_OFFSET = 5
+/** Keeps the top row clear of the ceiling, in world units. */
+const START_GRID_TOP_MARGIN = START_MIN_WALL_D * MARBLE_DIAMETER + 0.4
+/** Largest row spacing; tighter rows are used only when the count needs them. */
+const START_GRID_MAX_ROW_GAP = 6
+
+/**
+ * Deterministic start grid for `count` marbles (2..20).
+ *
+ * Rows are staggered and horizontally centred in the start zone. The first
+ * row is the widest; the next row is one marble narrower so its columns sit
+ * between the first row's columns. Additional rows repeat that pattern. The
+ * rows are placed from the start line upward, and the row spacing shrinks only
+ * as far as the 1.3D pair rule allows, so 20 marbles fit the existing start
+ * zone without moving any wall.
+ */
+export function startPositionsFor(count: number): { x: number; y: number }[] {
+  const total = Math.min(
+    Math.max(Math.trunc(count), MIN_MARBLES),
+    MAX_MARBLES,
+  )
+  const lanes = Math.min(START_GRID_LANES, total)
+  const laneSpacing =
+    (TRACK_WIDTH - START_GRID_MARGIN * 2) / (START_GRID_LANES - 1)
+
+  // Fill rows greedily. A lone trailing marble is folded back into the row
+  // before it, so no row is a single marble when a balanced row is possible.
+  const rowCounts: number[] = []
+  let remaining = total
+  while (remaining > 0) {
+    const capacity = Math.max(1, rowCounts.length % 2 === 0 ? lanes : lanes - 1)
+    const take = Math.min(capacity, remaining)
+    rowCounts.push(take)
+    remaining -= take
+  }
+  if (rowCounts.length > 1 && rowCounts[rowCounts.length - 1] === 1) {
+    const previous = rowCounts[rowCounts.length - 2]
+    if (previous > 1) {
+      rowCounts[rowCounts.length - 2] = previous - 1
+      rowCounts[rowCounts.length - 1] = 2
+    }
+  }
+
+  const bottomY = START_LINE_Y + START_GRID_BOTTOM_OFFSET
+  const topY = TRACK_HEIGHT - START_GRID_TOP_MARGIN
+  const rows = rowCounts.length
+  const rowGap =
+    rows > 1
+      ? Math.max(
+          START_MIN_PAIR_D * MARBLE_DIAMETER + 0.05,
+          Math.min(START_GRID_MAX_ROW_GAP, (topY - bottomY) / (rows - 1)),
+        )
+      : 0
+
+  const positions: { x: number; y: number }[] = []
+  for (let row = 0; row < rows; row += 1) {
+    const rowCount = rowCounts[row]
+    const y = bottomY + rowGap * row
+    const leftmost = TRACK_WIDTH / 2 - ((rowCount - 1) / 2) * laneSpacing
+    for (let column = 0; column < rowCount; column += 1) {
+      positions.push({ x: leftmost + laneSpacing * column, y })
+    }
+  }
+  return positions
+}
+
+/** The default 10-marble grid, kept as a named export for tests. */
+export const START_POSITIONS = startPositionsFor(DEFAULT_MARBLES)
 
 interface Interval {
   min: number
@@ -218,7 +290,10 @@ function wallRects(): TrackRect[] {
 }
 
 /** Everything except the obstacles is fixed for a track; only obstacles seed. */
-function baseTrack(trackId: TrackId): Omit<TrackData, 'obstacles'> {
+function baseTrack(
+  trackId: TrackId,
+  count: number,
+): Omit<TrackData, 'obstacles'> {
   const spec = SPECS[trackId]
   return {
     id: spec.id,
@@ -227,9 +302,14 @@ function baseTrack(trackId: TrackId): Omit<TrackData, 'obstacles'> {
     height: TRACK_HEIGHT,
     bounds: { minX: 0, minY: 0, maxX: TRACK_WIDTH, maxY: TRACK_HEIGHT },
     walls: wallRects(),
-    startLineY: 124,
-    startZone: { minX: 0, minY: 124, maxX: TRACK_WIDTH, maxY: TRACK_HEIGHT },
-    startPositions: START_POSITIONS.map((slot) => ({ ...slot })),
+    startLineY: START_LINE_Y,
+    startZone: {
+      minX: 0,
+      minY: START_LINE_Y,
+      maxX: TRACK_WIDTH,
+      maxY: TRACK_HEIGHT,
+    },
+    startPositions: startPositionsFor(count),
     finishLine: {
       y: 8,
       zone: { minX: 0, minY: 5, maxX: TRACK_WIDTH, maxY: 11 },
@@ -299,8 +379,12 @@ function buildObstacles(trackId: TrackId, rng: RandomSource): TrackObstacles {
   return { bars, pegs }
 }
 
-function makeTrack(trackId: TrackId, obstacles: TrackObstacles): TrackData {
-  return { ...baseTrack(trackId), obstacles }
+function makeTrack(
+  trackId: TrackId,
+  obstacles: TrackObstacles,
+  count: number,
+): TrackData {
+  return { ...baseTrack(trackId, count), obstacles }
 }
 
 /**
@@ -336,8 +420,11 @@ function fallbackObstacles(trackId: TrackId): TrackObstacles {
 }
 
 /** The hand-built fallback track for `trackId` (used when seeding fails). */
-export function fallbackTrack(trackId: TrackId): TrackData {
-  return makeTrack(trackId, fallbackObstacles(trackId))
+export function fallbackTrack(
+  trackId: TrackId,
+  count: number = DEFAULT_MARBLES,
+): TrackData {
+  return makeTrack(trackId, fallbackObstacles(trackId), count)
 }
 
 /**
@@ -347,20 +434,29 @@ export function fallbackTrack(trackId: TrackId): TrackData {
  * Bounded: at most `MAX_ATTEMPTS` attempts, then the fallback with a
  * `console.warn`. Never touches `Math.random`, `Date` or `performance.now`.
  */
-export function buildTrack(trackId: TrackId, seed: number, attempt = 0): TrackData {
+export function buildTrack(
+  trackId: TrackId,
+  seed: number,
+  count: number = DEFAULT_MARBLES,
+  attempt = 0,
+): TrackData {
   const normalized = normalizeSeed(seed)
+  const marbleCount = Math.min(
+    Math.max(Math.trunc(count), MIN_MARBLES),
+    MAX_MARBLES,
+  )
   const rng = mulberry32((normalized + attempt * 0x9e3779b1) >>> 0)
 
-  const track = makeTrack(trackId, buildObstacles(trackId, rng))
-  const report = validateTrack(track)
+  const track = makeTrack(trackId, buildObstacles(trackId, rng), marbleCount)
+  const report = validateTrack(track, marbleCount)
   if (report.valid) return track
 
   if (attempt + 1 < MAX_ATTEMPTS) {
-    return buildTrack(trackId, normalized, attempt + 1)
+    return buildTrack(trackId, normalized, marbleCount, attempt + 1)
   }
 
-  const fallback = fallbackTrack(trackId)
-  const fallbackReport = validateTrack(fallback)
+  const fallback = fallbackTrack(trackId, marbleCount)
+  const fallbackReport = validateTrack(fallback, marbleCount)
   console.warn(
     `[track] ${trackId} seeded generation failed after ${MAX_ATTEMPTS} attempts ` +
       `(seed ${normalized}); using fallback layout` +

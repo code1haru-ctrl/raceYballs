@@ -63,6 +63,8 @@ export interface RaceHistoryEntry {
   trackId: TrackId
   trackName: string
   seed: number
+  /** How many marbles took part in this race. */
+  marbleCount: number
   /** Finishing order of the marbles that crossed the line. */
   results: FinishRecord[]
   /** The marbles that never finished. */
@@ -98,9 +100,11 @@ export interface RaceSnapshot {
   /** Display name of the currently loaded track. */
   trackName: string
   seed: number
+  /** Number of active marbles in the staged or current race. */
+  marbleCount: number
   results: FinishRecord[]
   standings: MarbleStanding[]
-  /** The marble names and colors currently in use. */
+  /** The names and colors of the active marbles only. */
   marbles: MarbleConfig[]
   /** The last completed races, newest first. */
   history: RaceHistoryEntry[]
