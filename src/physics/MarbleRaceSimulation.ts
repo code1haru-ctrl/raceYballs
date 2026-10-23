@@ -1,6 +1,16 @@
-import { Box, Circle, World, type Body, type Contact, type Fixture } from 'planck'
+import {
+  Box,
+  Circle,
+  World,
+  type Body,
+  type Contact,
+  type ContactImpulse,
+  type Fixture,
+} from 'planck'
 import {
   BAR_RESTITUTION,
+  COLLISION_MIN_APPROACH_SPEED,
+  COLLISION_SILENCE_AFTER_TELEPORT_S,
   FIXED_TIME_STEP,
   GRAVITY_Y,
   HARD_RACE_LIMIT_S,
@@ -71,6 +81,19 @@ export interface FinishEvent {
 }
 
 /**
+ * A physics contact worth reporting to the race event stream (Phase 5).
+ * `impact` is the sum of the post-solve normal impulses; the audio layer
+ * decides what level that maps to.
+ */
+export interface MarbleCollisionEvent {
+  marbleId: string
+  /** The other marble, or null when the contact was with track geometry. */
+  otherId: string | null
+  kind: 'marble' | 'track'
+  impact: number
+}
+
+/**
  * Owns the Planck.js world for one race: static track geometry, ten dynamic
  * marbles, the finish-line sensor, finish-order recording and the Phase 3B
  * DNF rules. Positions come from the physics engine only; nothing in here
@@ -92,6 +115,13 @@ export class MarbleRaceSimulation {
   onFinish: ((event: FinishEvent) => void) | null = null
   onDnf: ((event: DnfEvent) => void) | null = null
   onComplete: (() => void) | null = null
+  /** Plain contact events; the physics world never imports audio. */
+  onCollision: ((event: MarbleCollisionEvent) => void) | null = null
+
+  /** Pre-solve approach speed per contact, consumed by the post-solve handler. */
+  private approachSpeeds = new WeakMap<Contact, number>()
+  /** Per-marble simulation time until which contacts are muted (teleports). */
+  private collisionSilencedUntil: number[] = []
 
   constructor(defs: readonly MarbleDefinition[], track: TrackData = PROTOTYPE_TRACK) {
     this.track = track
@@ -271,6 +301,12 @@ export class MarbleRaceSimulation {
     marble.prevY = y
     marble.renderX = x
     marble.renderY = y
+
+    // Recovery moves a marble outside the normal flow of the race. Its
+    // contacts for the next fraction of a simulation second are ignored so a
+    // teleport can never be heard as a collision.
+    this.collisionSilencedUntil[index] =
+      this.simTime + COLLISION_SILENCE_AFTER_TELEPORT_S
     return true
   }
 
@@ -308,6 +344,8 @@ export class MarbleRaceSimulation {
     this.bodies = []
     this.marbleIndexByBody = new Map<Body, number>()
     this.finishFixture = null
+    this.approachSpeeds = new WeakMap<Contact, number>()
+    this.collisionSilencedUntil = new Array(defs.length).fill(0)
 
     for (const wall of track.walls) {
       const body = world.createBody({ position: { x: wall.cx, y: wall.cy } })
@@ -347,6 +385,8 @@ export class MarbleRaceSimulation {
     })
 
     world.on('begin-contact', this.handleBeginContact)
+    world.on('pre-solve', this.handlePreSolve)
+    world.on('post-solve', this.handlePostSolve)
 
     for (let i = 0; i < defs.length; i += 1) {
       const slot = track.startPositions[i]
@@ -382,6 +422,93 @@ export class MarbleRaceSimulation {
 
     const index = this.marbleIndexByBody.get(marbleFixture.getBody())
     if (index !== undefined) this.recordFinish(index)
+  }
+
+  /**
+   * Records how fast the two bodies approached each other along the contact
+   * normal. This distinguishes a real hit from a resting/stacked contact whose
+   * post-solve impulse is just the support impulse of the marbles above it.
+   */
+  private readonly handlePreSolve = (contact: Contact): void => {
+    const normal = contact.getWorldManifold(null)?.normal
+    if (!normal) {
+      this.approachSpeeds.delete(contact)
+      return
+    }
+
+    const bodyA = contact.getFixtureA().getBody()
+    const bodyB = contact.getFixtureB().getBody()
+    const velocityA = bodyA.getLinearVelocity()
+    const velocityB = bodyB.getLinearVelocity()
+    const relativeNormalSpeed =
+      (velocityA.x - velocityB.x) * normal.x +
+      (velocityA.y - velocityB.y) * normal.y
+
+    this.approachSpeeds.set(contact, Math.max(0, relativeNormalSpeed))
+  }
+
+  private readonly handlePostSolve = (
+    contact: Contact,
+    impulse: ContactImpulse,
+  ): void => {
+    const approachSpeed = this.approachSpeeds.get(contact) ?? 0
+    this.approachSpeeds.delete(contact)
+    if (this.completed) return
+
+    const fixtureA = contact.getFixtureA()
+    const fixtureB = contact.getFixtureB()
+    if (fixtureA === this.finishFixture || fixtureB === this.finishFixture) {
+      return
+    }
+
+    const indexA = this.marbleIndexByBody.get(fixtureA.getBody())
+    const indexB = this.marbleIndexByBody.get(fixtureB.getBody())
+    if (indexA === undefined && indexB === undefined) return
+
+    if (approachSpeed < COLLISION_MIN_APPROACH_SPEED) return
+
+    let impact = 0
+    for (const normalImpulse of impulse.normalImpulses) {
+      impact += Math.abs(normalImpulse)
+    }
+    if (impact <= 0) return
+
+    let index: number
+    let otherIndex: number | undefined
+    let kind: 'marble' | 'track'
+
+    if (indexA !== undefined && indexB !== undefined) {
+      if (
+        this.isCollisionSilenced(indexA) ||
+        this.isCollisionSilenced(indexB)
+      ) {
+        return
+      }
+
+      const statusA = this.marbles[indexA].status
+      const statusB = this.marbles[indexB].status
+      if (statusA !== 'racing' && statusB !== 'racing') return
+
+      index = statusA === 'racing' ? indexA : indexB
+      otherIndex = index === indexA ? indexB : indexA
+      kind = 'marble'
+    } else {
+      index = indexA ?? indexB!
+      if (this.isCollisionSilenced(index)) return
+      if (this.marbles[index].status !== 'racing') return
+      kind = 'track'
+    }
+
+    this.onCollision?.({
+      marbleId: this.marbles[index].id,
+      otherId: otherIndex === undefined ? null : this.marbles[otherIndex].id,
+      kind,
+      impact,
+    })
+  }
+
+  private isCollisionSilenced(index: number): boolean {
+    return this.simTime < (this.collisionSilencedUntil[index] ?? 0)
   }
 
   private recordFinish(index: number): void {

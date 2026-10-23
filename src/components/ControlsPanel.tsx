@@ -1,4 +1,4 @@
-import { Gauge, Lock, Volume2 } from 'lucide-react'
+import { Gauge, Lock, Volume2, VolumeX } from 'lucide-react'
 import { formatSpeed } from '../race/format'
 import { MAX_SPEED, MIN_SPEED, SPEED_STEP } from '../race/RaceController'
 import { Panel } from './Panel'
@@ -6,9 +6,20 @@ import { Panel } from './Panel'
 interface ControlsPanelProps {
   speed: number
   onSpeedChange: (value: number) => void
+  muted: boolean
+  volume: number
+  onToggleMute: () => void
+  onVolumeChange: (value: number) => void
 }
 
-export function ControlsPanel({ speed, onSpeedChange }: ControlsPanelProps) {
+export function ControlsPanel({
+  speed,
+  onSpeedChange,
+  muted,
+  volume,
+  onToggleMute,
+  onVolumeChange,
+}: ControlsPanelProps) {
   const fillPercent = ((speed - MIN_SPEED) / (MAX_SPEED - MIN_SPEED)) * 100
 
   return (
@@ -58,26 +69,34 @@ export function ControlsPanel({ speed, onSpeedChange }: ControlsPanelProps) {
               Audio
             </span>
             <span className="font-mono text-[0.55rem] tracking-widest text-dim uppercase">
-              Volume 70
+              Volume {Math.round(volume * 100)}
             </span>
           </div>
           <div className="mt-2.5 flex items-center gap-3">
             <button
               type="button"
+              onClick={onToggleMute}
               className="icon-btn size-8 shrink-0"
-              disabled
-              aria-label="Mute audio — coming in a later phase"
-              title="Mute audio — coming in a later phase"
+              aria-label={muted ? 'Unmute audio' : 'Mute audio'}
+              aria-pressed={muted}
+              title={muted ? 'Unmute audio' : 'Mute audio'}
             >
-              <Volume2 className="size-4" aria-hidden="true" />
+              {muted ? (
+                <VolumeX className="size-4" aria-hidden="true" />
+              ) : (
+                <Volume2 className="size-4" aria-hidden="true" />
+              )}
             </button>
             <input
               type="range"
               min={0}
               max={100}
-              defaultValue={70}
-              disabled
-              aria-label="Volume — coming in a later phase"
+              step={1}
+              value={Math.round(volume * 100)}
+              onChange={(event) =>
+                onVolumeChange(Number(event.target.value) / 100)
+              }
+              aria-label="Master volume"
               className="range"
             />
           </div>
@@ -93,8 +112,7 @@ export function ControlsPanel({ speed, onSpeedChange }: ControlsPanelProps) {
           />
           Speed changes how fast simulated time advances, not the renderer.
           Physics always steps a fixed 1/60&nbsp;s (up to 12 catch-up steps per
-          frame), so races stay stable at any speed. Audio arrives in a later
-          phase.
+          frame), so races stay stable at any speed.
         </p>
       </div>
     </Panel>

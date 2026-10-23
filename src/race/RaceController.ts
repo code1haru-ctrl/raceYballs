@@ -18,6 +18,14 @@ import {
   validateMarbleColor,
   validateMarbleName,
 } from './marbleCustomization'
+import { OvertakeDetector } from './overtakes'
+import { CenterlinePath } from './progress'
+import type {
+  RaceEvent,
+  RaceEventListener,
+  RaceEventSource,
+  SilenceReason,
+} from './raceEvents'
 import { RecoveryManager } from './recovery'
 import type {
   FinishRecord,
@@ -61,11 +69,14 @@ interface DnfDetail {
  * React only ever reads the cached snapshot through `useSyncExternalStore`;
  * per-frame work never triggers a React render.
  */
-export class RaceController {
+export class RaceController implements RaceEventSource {
   private sim: MarbleRaceSimulation
   private camera: RaceCamera
   private recovery: RecoveryManager
   private listeners = new Set<() => void>()
+  private raceEventListeners = new Set<RaceEventListener>()
+  private path: CenterlinePath
+  private overtakes = new OvertakeDetector()
   private snapshot: RaceSnapshot
   private state: RaceState = 'Ready'
   private speed = DEFAULT_SPEED
@@ -102,8 +113,17 @@ export class RaceController {
     )
     this.camera = new RaceCamera(this.sim.track)
     this.recovery = new RecoveryManager(this.sim.track)
+    this.path = new CenterlinePath(this.sim.track.centerline)
     this.wireCallbacks()
     this.snapshot = this.buildSnapshot()
+  }
+
+  /** Subscribes to plain race events (collision, overtake, finish, silence). */
+  subscribeRaceEvents = (listener: RaceEventListener): (() => void) => {
+    this.raceEventListeners.add(listener)
+    return () => {
+      this.raceEventListeners.delete(listener)
+    }
   }
 
   /**
@@ -115,7 +135,24 @@ export class RaceController {
    * racing line. A marble that runs out of attempts becomes a DNF.
    */
   private wireCallbacks(): void {
-    this.sim.onFinish = () => this.publish()
+    this.sim.onFinish = (event) => {
+      this.emitRaceEvent({
+        type: 'finish',
+        place: event.place,
+        marbleId: event.marbleId,
+        timeSec: event.timeSec,
+      })
+      this.publish()
+    }
+    this.sim.onCollision = (event) => {
+      this.emitRaceEvent({
+        type: 'collision',
+        marbleId: event.marbleId,
+        otherId: event.otherId,
+        kind: event.kind,
+        impact: event.impact,
+      })
+    }
     this.sim.onDnf = (event) => {
       const index = this.sim.marbles.findIndex(
         (marble) => marble.id === event.marbleId,
@@ -133,7 +170,12 @@ export class RaceController {
       this.recordHistory()
       this.publish()
     }
-    this.recovery.onRecover = () => this.publish()
+    this.recovery.onRecover = () => {
+      // A teleport changes the ranking without a real pass. Re-baseline the
+      // overtake detector so the move itself is never heard.
+      this.overtakes.reset()
+      this.publish()
+    }
   }
 
   subscribe = (listener: () => void): (() => void) => {
@@ -258,10 +300,13 @@ export class RaceController {
     // and every label would be projected off the left edge.
     this.camera.setTrack(track)
     this.syncSize()
+    this.path = new CenterlinePath(track.centerline)
+    this.overtakes.reset()
     this.state = 'Ready'
     this.accumulator = 0
     this.lastPublishedSecond = -1
     this.dnfDetails.clear()
+    this.emitSilence('track-change')
     this.publish()
   }
 
@@ -274,6 +319,7 @@ export class RaceController {
     this.lastFrameTime = performance.now()
     this.raceSerial += 1
     this.dnfDetails.clear()
+    this.overtakes.reset()
     this.publish()
   }
 
@@ -290,7 +336,9 @@ export class RaceController {
     this.accumulator = 0
     this.lastPublishedSecond = -1
     this.dnfDetails.clear()
+    this.overtakes.reset()
     this.camera.reset()
+    this.emitSilence('reset')
     this.publish()
   }
 
@@ -312,11 +360,14 @@ export class RaceController {
     this.wireCallbacks()
     this.camera.setTrack(track)
     this.syncSize()
+    this.path = new CenterlinePath(track.centerline)
+    this.overtakes.reset()
     this.state = 'Ready'
     this.accumulator = 0
     this.lastPublishedSecond = -1
     this.dnfDetails.clear()
     this.camera.reset()
+    this.emitSilence('race-again')
     this.publish()
     return nextSeed
   }
@@ -361,6 +412,7 @@ export class RaceController {
   dispose = (): void => {
     this.detach()
     this.listeners.clear()
+    this.raceEventListeners.clear()
   }
 
   private readonly frame = (now: number): void => {
@@ -383,7 +435,10 @@ export class RaceController {
 
       // Stuck detection and recovery run on the simulated clock, right after
       // the physics of this frame.
-      if (this.state === 'Running') this.recovery.update(this.sim)
+      if (this.state === 'Running') {
+        this.recovery.update(this.sim)
+        this.detectOvertakes(performance.now())
+      }
     }
 
     const alpha =
@@ -428,6 +483,42 @@ export class RaceController {
       if (second !== this.lastPublishedSecond) {
         this.lastPublishedSecond = second
         this.publish()
+      }
+    }
+  }
+
+  /**
+   * Ranks the active marbles by centerline progress and emits the swaps that
+   * pass the detector's margin and hold-time rules. Only the swap is emitted;
+   * the audio layer decides whether it gets a sound (cooldown, mute, ...).
+   */
+  private detectOvertakes(nowMs: number): void {
+    const samples = this.sim.marbles.map((marble) => ({
+      id: marble.id,
+      progress: this.path.progressAt(marble.x, marble.y),
+      status: marble.status,
+    }))
+
+    for (const overtake of this.overtakes.update(samples, nowMs)) {
+      this.emitRaceEvent({
+        type: 'overtake',
+        overtakerId: overtake.overtakerId,
+        overtakenId: overtake.overtakenId,
+        margin: overtake.margin,
+      })
+    }
+  }
+
+  private emitSilence(reason: SilenceReason): void {
+    this.emitRaceEvent({ type: 'silence', reason })
+  }
+
+  private emitRaceEvent(event: RaceEvent): void {
+    for (const listener of this.raceEventListeners) {
+      try {
+        listener(event)
+      } catch {
+        // Audio must never be able to break the race loop.
       }
     }
   }

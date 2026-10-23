@@ -64,3 +64,20 @@ export const RECOVERY_CLEARANCE_D = 1.5
 export const RECOVERY_SAMPLE_STEP = 0.5
 /** Hard race timeout in simulated seconds; still-racing marbles are DNF. */
 export const HARD_RACE_LIMIT_S = 120
+
+/**
+ * Phase 5 — collision reporting.
+ *
+ * A contact only becomes a race event when the pre-solve approach speed is at
+ * least this value, which keeps resting/stacked contacts silent. Teleports are
+ * followed by a short suppression window so recovery never produces a hit.
+ */
+export const COLLISION_MIN_APPROACH_SPEED = 0.8
+export const COLLISION_SILENCE_AFTER_TELEPORT_S = 0.35
+
+/**
+ * Overtake detection. The margin is a centerline distance, the hold time is
+ * real time so a faster simulation never produces more overtake sounds.
+ */
+export const OVERTAKE_MIN_PROGRESS_MARGIN = MARBLE_DIAMETER * 0.75
+export const OVERTAKE_HOLD_MS = 220

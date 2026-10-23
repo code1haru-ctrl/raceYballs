@@ -1,4 +1,6 @@
 import { useEffect, useState, useSyncExternalStore } from 'react'
+import { AUDIO_CONFIG } from './audio/config'
+import { RaceAudio } from './audio/RaceAudio'
 import { ControlsPanel } from './components/ControlsPanel'
 import { Header } from './components/Header'
 import { MarbleGarage } from './components/MarbleGarage'
@@ -16,8 +18,11 @@ function App() {
   const [selectedTrackId, setSelectedTrackId] = useState<TrackId>('neon-circuit')
   const [seed, setSeed] = useState<number>(DEFAULT_SEEDS['neon-circuit'])
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [volume, setVolume] = useState(AUDIO_CONFIG.defaultVolume)
+  const [muted, setMuted] = useState(AUDIO_CONFIG.defaultMuted)
 
   const [controller] = useState(() => new RaceController())
+  const [raceAudio] = useState(() => new RaceAudio())
 
   const snapshot = useSyncExternalStore(
     controller.subscribe,
@@ -27,6 +32,37 @@ function App() {
   useEffect(() => {
     return () => controller.dispose()
   }, [controller])
+
+  useEffect(() => {
+    raceAudio.setVolume(volume)
+  }, [raceAudio, volume])
+
+  useEffect(() => {
+    raceAudio.setMuted(muted)
+  }, [raceAudio, muted])
+
+  useEffect(() => {
+    const detach = raceAudio.attach(controller)
+    return () => {
+      detach()
+      raceAudio.dispose()
+    }
+  }, [raceAudio, controller])
+
+  const handleStart = () => {
+    void raceAudio.unlock()
+    controller.start()
+  }
+
+  const handleToggleMute = () => {
+    void raceAudio.unlock()
+    setMuted((current) => !current)
+  }
+
+  const handleVolumeChange = (value: number) => {
+    void raceAudio.unlock()
+    setVolume(value)
+  }
 
   const selectedTrack =
     TRACKS.find((track) => track.id === selectedTrackId) ?? TRACKS[0]
@@ -71,7 +107,7 @@ function App() {
               <RaceStatusPanel
                 track={selectedTrack}
                 snapshot={snapshot}
-                onStart={controller.start}
+                onStart={handleStart}
                 onReset={controller.reset}
                 onRaceAgain={handleRaceAgain}
               />
@@ -86,6 +122,10 @@ function App() {
                 <ControlsPanel
                   speed={snapshot.speed}
                   onSpeedChange={controller.setSpeed}
+                  muted={muted}
+                  volume={volume}
+                  onToggleMute={handleToggleMute}
+                  onVolumeChange={handleVolumeChange}
                 />
               </div>
             </div>
