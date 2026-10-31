@@ -76,30 +76,41 @@ const START_GRID_MAX_ROW_GAP = 6
  * as far as the 1.3D pair rule allows, so 20 marbles fit the existing start
  * zone without moving any wall.
  */
-export function startPositionsFor(count: number): { x: number; y: number }[] {
+export function startPositionsFor(count: number, trackId?: TrackId): { x: number; y: number }[] {
   const total = Math.min(
     Math.max(Math.trunc(count), MIN_MARBLES),
     MAX_MARBLES,
   )
-  const lanes = Math.min(START_GRID_LANES, total)
-  const laneSpacing =
-    (TRACK_WIDTH - START_GRID_MARGIN * 2) / (START_GRID_LANES - 1)
+  const channelWidth = trackId === 'wyrmwood' ? 12 : TRACK_WIDTH
+  const maxLanes = trackId === 'wyrmwood' ? 3 : START_GRID_LANES
+  const lanes = Math.min(maxLanes, total)
+  
+  const laneSpacing = trackId === 'wyrmwood'
+    ? (channelWidth - START_MIN_WALL_D * MARBLE_DIAMETER * 2) / 2
+    : (channelWidth - START_GRID_MARGIN * 2) / (maxLanes - 1)
 
-  // Fill rows greedily. A lone trailing marble is folded back into the row
-  // before it, so no row is a single marble when a balanced row is possible.
   const rowCounts: number[] = []
   let remaining = total
-  while (remaining > 0) {
-    const capacity = Math.max(1, rowCounts.length % 2 === 0 ? lanes : lanes - 1)
-    const take = Math.min(capacity, remaining)
-    rowCounts.push(take)
-    remaining -= take
-  }
-  if (rowCounts.length > 1 && rowCounts[rowCounts.length - 1] === 1) {
-    const previous = rowCounts[rowCounts.length - 2]
-    if (previous > 1) {
-      rowCounts[rowCounts.length - 2] = previous - 1
-      rowCounts[rowCounts.length - 1] = 2
+  if (trackId === 'wyrmwood') {
+    while (remaining > 0) {
+      const capacity = rowCounts.length % 2 === 0 ? 3 : 2
+      const take = Math.min(capacity, remaining)
+      rowCounts.push(take)
+      remaining -= take
+    }
+  } else {
+    while (remaining > 0) {
+      const capacity = Math.max(1, rowCounts.length % 2 === 0 ? lanes : lanes - 1)
+      const take = Math.min(capacity, remaining)
+      rowCounts.push(take)
+      remaining -= take
+    }
+    if (rowCounts.length > 1 && rowCounts[rowCounts.length - 1] === 1) {
+      const previous = rowCounts[rowCounts.length - 2]
+      if (previous > 1) {
+        rowCounts[rowCounts.length - 2] = previous - 1
+        rowCounts[rowCounts.length - 1] = 2
+      }
     }
   }
 
@@ -110,7 +121,10 @@ export function startPositionsFor(count: number): { x: number; y: number }[] {
     rows > 1
       ? Math.max(
           START_MIN_PAIR_D * MARBLE_DIAMETER + 0.05,
-          Math.min(START_GRID_MAX_ROW_GAP, (topY - bottomY) / (rows - 1)),
+          Math.min(
+            trackId === 'wyrmwood' ? 3.5 : START_GRID_MAX_ROW_GAP,
+            (topY - bottomY) / (rows - 1),
+          ),
         )
       : 0
 
@@ -118,7 +132,8 @@ export function startPositionsFor(count: number): { x: number; y: number }[] {
   for (let row = 0; row < rows; row += 1) {
     const rowCount = rowCounts[row]
     const y = bottomY + rowGap * row
-    const leftmost = TRACK_WIDTH / 2 - ((rowCount - 1) / 2) * laneSpacing
+    const channelLeft = (TRACK_WIDTH - channelWidth) / 2
+    const leftmost = channelLeft + (channelWidth / 2 - ((rowCount - 1) / 2) * laneSpacing)
     for (let column = 0; column < rowCount; column += 1) {
       positions.push({ x: leftmost + laneSpacing * column, y })
     }
@@ -165,8 +180,19 @@ interface TrackSpec {
 
 const WYRMWOOD_GATES: Gate[] = [
   { x: 20, y: 124 },
+  { x: 20, y: 95 },
+  { x: 20, y: 65 },
+  { x: 20, y: 35 },
   { x: 20, y: 8 },
 ]
+
+const WYRMWOOD_RECIPES: Recipe[] = [
+  { kind: 'diamond', x: { min: 10, max: 30 }, radius: { min: 2, max: 3 }, angle: [0, 45] },
+  { kind: 'pegs', count: [4, 6], radius: { min: 1, max: 1.5 }, edge: { min: 2, max: 5 } },
+  { kind: 'diamond', x: { min: 10, max: 30 }, radius: { min: 2, max: 3 }, angle: [0, 45] },
+  { kind: 'pegs', count: [4, 6], radius: { min: 1, max: 1.5 }, edge: { min: 2, max: 5 } },
+]
+
 const ELDERGARDE_GATES: Gate[] = [
   { x: 20, y: 124 },
   { x: 20, y: 8 },
@@ -186,9 +212,7 @@ const SPECS: Record<TrackId, TrackSpec> = {
     name: 'Wyrmwood',
     tagline: 'Pachinko-style forest maze.',
     gates: WYRMWOOD_GATES,
-    recipes: [
-      { kind: 'empty' },
-    ],
+    recipes: WYRMWOOD_RECIPES,
   },
   'eldergarde': {
     id: 'eldergarde',
@@ -280,7 +304,7 @@ function baseTrack(
       maxX: TRACK_WIDTH,
       maxY: TRACK_HEIGHT,
     },
-    startPositions: startPositionsFor(count),
+    startPositions: startPositionsFor(count, trackId),
     finishLine: {
       y: 8,
       zone: { minX: 0, minY: 5, maxX: TRACK_WIDTH, maxY: 11 },
