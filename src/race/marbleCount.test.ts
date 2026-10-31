@@ -159,7 +159,7 @@ describe('customisation across a count change', () => {
 describe('completion for variable fields', () => {
   for (const count of [MIN_MARBLES, 10, MAX_MARBLES]) {
     it(`fires exactly once for ${count} marbles with finished and DNF`, () => {
-      const track = buildTrack('neon-circuit', 1, count)
+      const track = buildTrack('wyrmwood', 1, count)
       const sim = new MarbleRaceSimulation(defsFor(count), track)
       const recovery = new RecoveryManager(track)
       let completions = 0

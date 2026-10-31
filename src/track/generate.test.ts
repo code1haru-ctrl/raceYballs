@@ -142,7 +142,7 @@ describe('seeded track generation', () => {
   })
 
   it('rejects a hand-broken layout', () => {
-    const base = buildTrack('neon-circuit', 1)
+    const base = buildTrack('wyrmwood', 1)
     const broken = {
       ...base,
       obstacles: {
@@ -161,7 +161,7 @@ describe('seeded track generation', () => {
   })
 
   it('rejects a start grid with overlapping marbles', () => {
-    const base = buildTrack('neon-circuit', 1)
+    const base = buildTrack('wyrmwood', 1)
     const crowded = {
       ...base,
       startPositions: START_POSITIONS.map((slot, index) =>

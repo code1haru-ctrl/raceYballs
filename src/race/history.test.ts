@@ -5,7 +5,7 @@ import type { RaceHistoryEntry } from './types'
 function makeEntry(id: string, overrides: Partial<RaceHistoryEntry> = {}): RaceHistoryEntry {
   return {
     id,
-    trackId: 'neon-circuit',
+    trackId: 'wyrmwood',
     trackName: 'Neon Circuit',
     seed: 1234,
     marbleCount: 2,

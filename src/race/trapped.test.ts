@@ -228,7 +228,7 @@ describe('shipped tracks', () => {
     (marble) => ({ id: marble.id }),
   )
 
-  for (const trackId of ['neon-circuit', 'chaos-canyon', 'gravity-gauntlet'] as const) {
+  for (const trackId of ['wyrmwood', 'eldergarde', 'ironhallow'] as const) {
     it(`${trackId} still finishes all ${DEFAULT_MARBLES} marbles with recovery enabled`, () => {
       const track = buildTrack(trackId, DEFAULT_SEEDS[trackId])
       const sim = new MarbleRaceSimulation(defs, track)

@@ -12,7 +12,7 @@ const VIEWPORTS = [
   { width: 1900, height: 900 },
 ]
 
-const TRACK = buildTrack('neon-circuit', DEFAULT_SEEDS['neon-circuit'])
+const TRACK = buildTrack('wyrmwood', DEFAULT_SEEDS['wyrmwood'])
 
 /** A racing group spread down the course, roughly where the marbles are. */
 function group(): MarbleRuntime[] {
@@ -73,7 +73,7 @@ describe('camera viewport', () => {
     const camera = new RaceCamera(TRACK)
     camera.resize(1400, 950)
 
-    const other = buildTrack('chaos-canyon', DEFAULT_SEEDS['chaos-canyon'])
+    const other = buildTrack('eldergarde', DEFAULT_SEEDS['eldergarde'])
     camera.setTrack(other)
 
     expect(camera.viewport).toEqual({ width: 1400, height: 950 })
@@ -82,7 +82,7 @@ describe('camera viewport', () => {
   it('still frames the group after the track changes', () => {
     const camera = new RaceCamera(TRACK)
     camera.resize(1400, 950)
-    camera.setTrack(buildTrack('chaos-canyon', DEFAULT_SEEDS['chaos-canyon']))
+    camera.setTrack(buildTrack('eldergarde', DEFAULT_SEEDS['eldergarde']))
 
     for (let step = 0; step < 240; step += 1) {
       camera.update(1 / 60, 'follow', group(), 1)

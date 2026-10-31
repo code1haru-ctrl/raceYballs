@@ -94,8 +94,8 @@ export class RaceController implements RaceEventSource {
   private ctx: CanvasRenderingContext2D | null = null
   private layout = { width: 0, height: 0, dpr: 1 }
   private accent = '#2ce9ff'
-  private trackId: TrackId = 'neon-circuit'
-  private seed = DEFAULT_SEEDS['neon-circuit']
+  private trackId: TrackId = 'wyrmwood'
+  private seed = DEFAULT_SEEDS['wyrmwood']
   /** Active marble slots (2..20); the rest stay in the garage as reserves. */
   private marbleCount = DEFAULT_MARBLES
 

@@ -15,8 +15,8 @@ import { DEFAULT_SEEDS } from './track/generate'
 import { pickFreshSeed } from './track/seed'
 
 function App() {
-  const [selectedTrackId, setSelectedTrackId] = useState<TrackId>('neon-circuit')
-  const [seed, setSeed] = useState<number>(DEFAULT_SEEDS['neon-circuit'])
+  const [selectedTrackId, setSelectedTrackId] = useState<TrackId>('wyrmwood')
+  const [seed, setSeed] = useState<number>(DEFAULT_SEEDS['wyrmwood'])
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [volume, setVolume] = useState(AUDIO_CONFIG.defaultVolume)
   const [muted, setMuted] = useState(AUDIO_CONFIG.defaultMuted)

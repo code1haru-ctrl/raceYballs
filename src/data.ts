@@ -1,4 +1,4 @@
-export type TrackId = 'neon-circuit' | 'chaos-canyon' | 'gravity-gauntlet'
+export type TrackId = 'wyrmwood' | 'eldergarde' | 'ironhallow' | 'ashenmoor'
 
 export interface Track {
   id: TrackId
@@ -9,22 +9,28 @@ export interface Track {
 
 export const TRACKS: Track[] = [
   {
-    id: 'neon-circuit',
-    name: 'Neon Circuit',
-    tagline: 'Sweeping neon loops and long open straights.',
+    id: 'wyrmwood',
+    name: 'Wyrmwood',
+    tagline: 'Pachinko-style forest maze.',
     accent: '#2ce9ff',
   },
   {
-    id: 'chaos-canyon',
-    name: 'Chaos Canyon',
-    tagline: 'Jagged walls, split lines, and surprise drops.',
+    id: 'eldergarde',
+    name: 'Eldergarde',
+    tagline: 'Ancient funnel chamber.',
     accent: '#ff3fbf',
   },
   {
-    id: 'gravity-gauntlet',
-    name: 'Gravity Gauntlet',
-    tagline: 'Warped gravity and near-vertical plunges.',
+    id: 'ironhallow',
+    name: 'Ironhallow',
+    tagline: 'Hardened, structured iron maze.',
     accent: '#a97bff',
+  },
+  {
+    id: 'ashenmoor',
+    name: 'Ashenmoor',
+    tagline: 'Denser, unforgiving depths.',
+    accent: '#8df25c',
   },
 ]
 

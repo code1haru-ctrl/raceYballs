@@ -109,7 +109,7 @@ describe('race audio integration', () => {
   it('mutes contacts caused by a recovery teleport', () => {
     const sim = new MarbleRaceSimulation(
       MARBLES.slice(0, DEFAULT_MARBLES).map((marble) => ({ id: marble.id })),
-      buildTrack('neon-circuit', DEFAULT_SEEDS['neon-circuit']),
+      buildTrack('wyrmwood', DEFAULT_SEEDS['wyrmwood']),
     )
     const teleportedId = sim.marbles[0].id
     const collisions: string[] = []
