@@ -114,7 +114,7 @@ export function startPositionsFor(count: number, trackId?: TrackId): { x: number
     }
   }
 
-  const bottomY = START_LINE_Y + START_GRID_BOTTOM_OFFSET
+  const bottomY = (trackId ? START_LINE_Y_MAP[trackId] : START_LINE_Y) + START_GRID_BOTTOM_OFFSET
   const topY = TRACK_HEIGHT - START_GRID_TOP_MARGIN
   const rows = rowCounts.length
   const rowGap =
@@ -179,12 +179,19 @@ interface TrackSpec {
 }
 
 const WYRMWOOD_GATES: Gate[] = [
-  { x: 20, y: 124 },
+  { x: 20, y: 122 },
   { x: 20, y: 95 },
   { x: 20, y: 65 },
   { x: 20, y: 35 },
   { x: 20, y: 8 },
 ]
+
+export const START_LINE_Y_MAP: Record<TrackId, number> = {
+  'wyrmwood': 122,
+  'eldergarde': 124,
+  'ironhallow': 124,
+  'ashenmoor': 124,
+}
 
 const WYRMWOOD_RECIPES: Recipe[] = [
   { kind: 'diamond', x: { min: 10, max: 30 }, radius: { min: 2, max: 3 }, angle: [0, 45] },
@@ -290,6 +297,7 @@ function baseTrack(
   count: number,
 ): Omit<TrackData, 'obstacles'> {
   const spec = SPECS[trackId]
+  const startLineY = START_LINE_Y_MAP[trackId] ?? START_LINE_Y
   return {
     id: spec.id,
     name: spec.name,
@@ -297,10 +305,10 @@ function baseTrack(
     height: TRACK_HEIGHT,
     bounds: { minX: 0, minY: 0, maxX: TRACK_WIDTH, maxY: TRACK_HEIGHT },
     walls: wallRects(),
-    startLineY: START_LINE_Y,
+    startLineY: startLineY,
     startZone: {
       minX: 0,
-      minY: START_LINE_Y,
+      minY: startLineY,
       maxX: TRACK_WIDTH,
       maxY: TRACK_HEIGHT,
     },
