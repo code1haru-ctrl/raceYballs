@@ -60,9 +60,11 @@ const START_GRID_MARGIN = START_MIN_WALL_D * MARBLE_DIAMETER + 0.8
  * How far the first row sits above the start line. This keeps the widest row
  * at least 1.5D above the tallest rotated obstacle on every seeded layout.
  */
-const START_GRID_BOTTOM_OFFSET = 8
+const START_GRID_BOTTOM_OFFSET = 5
+const WYRMWOOD_START_GRID_BOTTOM_OFFSET = 1.2
 /** Keeps the top row clear of the ceiling, in world units. */
-const START_GRID_TOP_MARGIN = START_MIN_WALL_D * MARBLE_DIAMETER + 2.0
+const START_GRID_TOP_MARGIN = START_MIN_WALL_D * MARBLE_DIAMETER + 0.4
+const WYRMWOOD_START_GRID_TOP_MARGIN = START_MIN_WALL_D * MARBLE_DIAMETER + 0.5
 /** Largest row spacing; tighter rows are used only when the count needs them. */
 const START_GRID_MAX_ROW_GAP = 6
 
@@ -114,8 +116,12 @@ export function startPositionsFor(count: number, trackId?: TrackId): { x: number
     }
   }
 
-  const bottomY = (trackId ? START_LINE_Y_MAP[trackId] : START_LINE_Y) + (trackId === 'wyrmwood' ? 8 : 5)
-  const topY = TRACK_HEIGHT - (trackId === 'wyrmwood' ? START_GRID_TOP_MARGIN : (START_MIN_WALL_D * MARBLE_DIAMETER + 0.4))
+  const bottomY =
+    (trackId ? START_LINE_Y_MAP[trackId] : START_LINE_Y) +
+    (trackId === 'wyrmwood' ? WYRMWOOD_START_GRID_BOTTOM_OFFSET : START_GRID_BOTTOM_OFFSET)
+  const topY =
+    TRACK_HEIGHT -
+    (trackId === 'wyrmwood' ? WYRMWOOD_START_GRID_TOP_MARGIN : START_GRID_TOP_MARGIN)
 
   const rows = rowCounts.length
   const rowGap =
@@ -418,14 +424,14 @@ function buildObstacles(trackId: TrackId, rng: RandomSource): TrackObstacles {
   // Add more bars for variability
   bars.push({ 
     cx: randomInRange(rng, 5, 35), 
-    cy: randomInRange(rng, 20, 120), 
+    cy: randomInRange(rng, 20, 110), 
     halfW: randomInRange(rng, 3, 7), 
     halfH: 0.7, 
     angleDeg: randomInRange(rng, -45, 45) 
   })
   bars.push({ 
     cx: randomInRange(rng, 5, 35), 
-    cy: randomInRange(rng, 20, 120), 
+    cy: randomInRange(rng, 20, 110), 
     halfW: randomInRange(rng, 3, 7), 
     halfH: 0.7, 
     angleDeg: randomInRange(rng, -45, 45) 
@@ -517,9 +523,10 @@ export function buildTrack(
   )
   const rng = mulberry32((normalized + attempt * 0x9e3779b1) >>> 0)
 
-  const track = makeTrack(trackId, buildObstacles(trackId, rng), marbleCount)
-  const report = validateTrack(track, marbleCount)
-  if (report.valid) return track
+  const obstacles = buildObstacles(trackId, rng)
+  const probe = makeTrack(trackId, obstacles, MAX_MARBLES)
+  const report = validateTrack(probe, MAX_MARBLES)
+  if (report.valid) return makeTrack(trackId, obstacles, marbleCount)
 
   if (attempt + 1 < MAX_ATTEMPTS) {
     return buildTrack(trackId, normalized, marbleCount, attempt + 1)
