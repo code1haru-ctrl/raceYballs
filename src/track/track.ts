@@ -25,6 +25,31 @@ export interface TrackCircle {
   radius: number
 }
 
+export interface TrackDiamond {
+  cx: number
+  cy: number
+  halfW: number
+  halfH: number
+  angleDeg: number
+}
+
+export interface TrackRing {
+  cx: number
+  cy: number
+  radius: number
+  thickness: number
+}
+
+export interface TrackConcaveWall {
+  cx: number
+  cy: number
+  halfW: number
+  halfH: number
+  angleDeg: number
+  /** Fraction of the rectangle that is concave (0..1). */
+  concavity: number
+}
+
 export interface TrackPoint {
   x: number
   y: number
@@ -48,6 +73,12 @@ export interface TrackObstacles {
   bars: TrackRect[]
   /** Round pegs. */
   pegs: TrackCircle[]
+  /** Diamond deflectors. */
+  diamonds: TrackDiamond[]
+  /** Ring deflectors. */
+  rings: TrackRing[]
+  /** Concave wall segments. */
+  concaveWalls: TrackConcaveWall[]
 }
 
 /** The line a marble must cross to be recorded as a finisher. */
@@ -129,19 +160,22 @@ export const PROTOTYPE_TRACK: TrackData = {
       angleDeg: 0,
     },
   ],
-  obstacles: {
-    bars: [
-      { cx: 7.4, cy: 110, halfW: 8, halfH: 0.7, angleDeg: -22 },
-      { cx: 32.6, cy: 95, halfW: 8, halfH: 0.7, angleDeg: 22 },
-      { cx: 7.4, cy: 66, halfW: 8, halfH: 0.7, angleDeg: -22 },
-      { cx: 32.6, cy: 52, halfW: 8, halfH: 0.7, angleDeg: 22 },
-      { cx: 20, cy: 26, halfW: 6.5, halfH: 0.7, angleDeg: -20 },
-    ],
-    pegs: [
-      { cx: 18, cy: 80, radius: 2.4 },
-      { cx: 22, cy: 38, radius: 2.4 },
-    ],
-  },
+    obstacles: {
+      bars: [
+        { cx: 7.4, cy: 110, halfW: 8, halfH: 0.7, angleDeg: -22 },
+        { cx: 32.6, cy: 95, halfW: 8, halfH: 0.7, angleDeg: 22 },
+        { cx: 7.4, cy: 66, halfW: 8, halfH: 0.7, angleDeg: -22 },
+        { cx: 32.6, cy: 52, halfW: 8, halfH: 0.7, angleDeg: 22 },
+        { cx: 20, cy: 26, halfW: 6.5, halfH: 0.7, angleDeg: -20 },
+      ],
+      pegs: [
+        { cx: 18, cy: 80, radius: 2.4 },
+        { cx: 22, cy: 38, radius: 2.4 },
+      ],
+      diamonds: [],
+      rings: [],
+      concaveWalls: [],
+    },
   startLineY: 124,
   startZone: { minX: 0, minY: 124, maxX: TRACK_WIDTH, maxY: TRACK_HEIGHT },
   startPositions: [
