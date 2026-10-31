@@ -135,8 +135,8 @@ export function validateTrack(
       if (circleOverlapsRect(a.x, a.y, MARBLE_RADIUS, wall)) {
         violations.push(`start slot ${i} overlaps a wall`)
       }
-      if (pointRectDistance(a.x, a.y, wall) < minWall) {
-        violations.push(`start slot ${i} is closer than ${START_MIN_WALL_D}D to a wall`)
+      if (pointRectDistance(a.x, a.y, wall) < minWall - 0.001) {
+        violations.push(`start slot ${i} at ${a.x.toFixed(1)},${a.y.toFixed(1)} is closer than ${START_MIN_WALL_D}D to a wall at ${wall.cx.toFixed(1)},${wall.cy.toFixed(1)}`)
       }
     }
     for (const bar of track.obstacles.bars) {

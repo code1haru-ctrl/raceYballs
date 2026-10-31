@@ -60,9 +60,9 @@ const START_GRID_MARGIN = START_MIN_WALL_D * MARBLE_DIAMETER + 0.8
  * How far the first row sits above the start line. This keeps the widest row
  * at least 1.5D above the tallest rotated obstacle on every seeded layout.
  */
-const START_GRID_BOTTOM_OFFSET = 5
+const START_GRID_BOTTOM_OFFSET = 8
 /** Keeps the top row clear of the ceiling, in world units. */
-const START_GRID_TOP_MARGIN = START_MIN_WALL_D * MARBLE_DIAMETER + 0.4
+const START_GRID_TOP_MARGIN = START_MIN_WALL_D * MARBLE_DIAMETER + 2.0
 /** Largest row spacing; tighter rows are used only when the count needs them. */
 const START_GRID_MAX_ROW_GAP = 6
 
@@ -86,7 +86,7 @@ export function startPositionsFor(count: number, trackId?: TrackId): { x: number
   const lanes = Math.min(maxLanes, total)
   
   const laneSpacing = trackId === 'wyrmwood'
-    ? (channelWidth - START_MIN_WALL_D * MARBLE_DIAMETER * 2) / 2
+    ? (channelWidth - START_MIN_WALL_D * MARBLE_DIAMETER * 2) / (maxLanes - 1)
     : (channelWidth - START_GRID_MARGIN * 2) / (maxLanes - 1)
 
   const rowCounts: number[] = []
@@ -114,8 +114,9 @@ export function startPositionsFor(count: number, trackId?: TrackId): { x: number
     }
   }
 
-  const bottomY = (trackId ? START_LINE_Y_MAP[trackId] : START_LINE_Y) + START_GRID_BOTTOM_OFFSET
-  const topY = TRACK_HEIGHT - START_GRID_TOP_MARGIN
+  const bottomY = (trackId ? START_LINE_Y_MAP[trackId] : START_LINE_Y) + (trackId === 'wyrmwood' ? 8 : 5)
+  const topY = TRACK_HEIGHT - (trackId === 'wyrmwood' ? START_GRID_TOP_MARGIN : (START_MIN_WALL_D * MARBLE_DIAMETER + 0.4))
+
   const rows = rowCounts.length
   const rowGap =
     rows > 1
@@ -132,8 +133,10 @@ export function startPositionsFor(count: number, trackId?: TrackId): { x: number
   for (let row = 0; row < rows; row += 1) {
     const rowCount = rowCounts[row]
     const y = bottomY + rowGap * row
-    const channelLeft = (TRACK_WIDTH - channelWidth) / 2
-    const leftmost = channelLeft + (channelWidth / 2 - ((rowCount - 1) / 2) * laneSpacing)
+  const channelLeft = trackId === 'wyrmwood' ? 14 : (TRACK_WIDTH - channelWidth) / 2
+  const leftmost = channelLeft + (channelWidth / 2 - ((rowCount - 1) / 2) * laneSpacing)
+
+
     for (let column = 0; column < rowCount; column += 1) {
       positions.push({ x: leftmost + laneSpacing * column, y })
     }
@@ -298,18 +301,23 @@ function baseTrack(
 ): Omit<TrackData, 'obstacles'> {
   const spec = SPECS[trackId]
   const startLineY = START_LINE_Y_MAP[trackId] ?? START_LINE_Y
+  const walls = wallRects()
+  if (trackId === 'wyrmwood') {
+      walls.push({ cx: 13, cy: (startLineY + TRACK_HEIGHT)/2, halfW: 1, halfH: (TRACK_HEIGHT - startLineY)/2, angleDeg: 0 })
+      walls.push({ cx: 27, cy: (startLineY + TRACK_HEIGHT)/2, halfW: 1, halfH: (TRACK_HEIGHT - startLineY)/2, angleDeg: 0 })
+  }
   return {
     id: spec.id,
     name: spec.name,
     width: TRACK_WIDTH,
     height: TRACK_HEIGHT,
     bounds: { minX: 0, minY: 0, maxX: TRACK_WIDTH, maxY: TRACK_HEIGHT },
-    walls: wallRects(),
+    walls: walls,
     startLineY: startLineY,
     startZone: {
-      minX: 0,
+      minX: trackId === 'wyrmwood' ? 14 : 0,
       minY: startLineY,
-      maxX: TRACK_WIDTH,
+      maxX: trackId === 'wyrmwood' ? 26 : TRACK_WIDTH,
       maxY: TRACK_HEIGHT,
     },
     startPositions: startPositionsFor(count, trackId),
