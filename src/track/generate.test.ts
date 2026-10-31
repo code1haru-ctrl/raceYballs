@@ -24,8 +24,10 @@ const DEFS = MARBLES.slice(0, DEFAULT_MARBLES).map((marble) => ({
 }))
 const TRACK_IDS: TrackId[] = TRACKS.map((track) => track.id)
 /** Finite window the headless matrix is judged against. */
-const MATRIX_SECONDS = 60
+const MATRIX_SECONDS = 120
+const RESET_SECONDS = 60
 const MATRIX_STEPS = Math.ceil(MATRIX_SECONDS / FIXED_TIME_STEP)
+const RESET_STEPS = Math.ceil(RESET_SECONDS / FIXED_TIME_STEP)
 
 /** Serialises the parts of a track a seed is allowed to change. */
 function obstacleSignature(
@@ -40,6 +42,24 @@ function obstacleSignature(
   })
 }
 
+/** Serialises everything a seed may change, including Wyrmwood's ramps. */
+function seedSignature(
+  trackId: TrackId,
+  seed: number,
+  count: number = DEFAULT_MARBLES,
+): string {
+  const track = buildTrack(trackId, seed, count)
+  return JSON.stringify({
+    walls: track.walls,
+    centerline: track.centerline,
+    bars: track.obstacles.bars,
+    pegs: track.obstacles.pegs,
+    diamonds: track.obstacles.diamonds,
+    rings: track.obstacles.rings,
+    concaveWalls: track.obstacles.concaveWalls,
+  })
+}
+
 /** Serialises the parts of a track a seed must never change. */
 function frameSignature(trackId: TrackId, seed: number): string {
   const track = buildTrack(trackId, seed)
@@ -47,12 +67,11 @@ function frameSignature(trackId: TrackId, seed: number): string {
     width: track.width,
     height: track.height,
     bounds: track.bounds,
-    walls: track.walls,
     startLineY: track.startLineY,
     startZone: track.startZone,
     startPositions: track.startPositions,
     finishLine: track.finishLine,
-    centerline: track.centerline,
+    deadZones: track.deadZones,
   })
 }
 
@@ -106,21 +125,26 @@ describe('seeded track generation', () => {
     }
   })
 
-  it('builds Wyrmwood diamonds with finite, intended extents', () => {
+  it('builds Wyrmwood as clean seeded switchbacks', () => {
     const track = buildTrack('wyrmwood', DEFAULT_SEEDS.wyrmwood)
-    expect(track.obstacles.diamonds.length).toBeGreaterThan(0)
-    for (const diamond of track.obstacles.diamonds) {
-      expect(Number.isFinite(diamond.halfW)).toBe(true)
-      expect(Number.isFinite(diamond.halfH)).toBe(true)
-      expect(diamond.halfH).toBe(diamond.halfW)
-      expect(diamond.halfW).toBeGreaterThanOrEqual(2)
-      expect(diamond.halfW).toBeLessThanOrEqual(3)
+    expect(track.obstacles.bars).toEqual([])
+    expect(track.obstacles.pegs).toEqual([])
+    expect(track.obstacles.diamonds).toEqual([])
+    expect(track.obstacles.rings).toEqual([])
+    expect(track.obstacles.concaveWalls).toEqual([])
+
+    const ramps = track.walls.filter((wall) => wall.role === 'ramp')
+    expect(ramps.length).toBeGreaterThanOrEqual(6)
+    expect(ramps.length).toBeLessThanOrEqual(9)
+    for (const ramp of ramps) {
+      expect(Number.isFinite(ramp.halfW)).toBe(true)
+      expect(Math.abs(ramp.angleDeg)).toBeGreaterThanOrEqual(13)
+      expect(Math.abs(ramp.angleDeg)).toBeLessThanOrEqual(14)
     }
 
-    for (const diamond of fallbackTrack('wyrmwood').obstacles.diamonds) {
-      expect(diamond.halfW).toBe(2)
-      expect(diamond.halfH).toBe(2)
-    }
+    const fallback = fallbackTrack('wyrmwood')
+    expect(fallback.obstacles.diamonds).toEqual([])
+    expect(fallback.walls.filter((wall) => wall.role === 'ramp').length).toBeGreaterThan(0)
   })
 
   it('never moves the fixed frame when only the seed changes', () => {
@@ -132,13 +156,33 @@ describe('seeded track generation', () => {
     }
   })
 
-  it('varies obstacles across at least two distinct seeds per track', () => {
+  it('varies the seeded course across at least two distinct seeds per track', () => {
     for (const trackId of TRACK_IDS) {
       const signatures = new Set(
-        [1, 2, 3, 4, 5].map((seed) => obstacleSignature(trackId, seed)),
+        [1, 2, 3, 4, 5].map((seed) => seedSignature(trackId, seed)),
       )
       expect(signatures.size).toBeGreaterThan(1)
     }
+  })
+
+  it('keeps Wyrmwood boundaries fixed while seeded ramps and centerline vary', () => {
+    const baseline = buildTrack('wyrmwood', DEFAULT_SEEDS.wyrmwood)
+    const fixedWalls = baseline.walls.filter((wall) => wall.role !== 'ramp')
+    const rampSignatures = new Set<string>()
+
+    for (const seed of [2, 7, 42, 999, 4294967295]) {
+      const track = buildTrack('wyrmwood', seed)
+      expect(track.walls.filter((wall) => wall.role !== 'ramp')).toEqual(fixedWalls)
+      expect(track.startPositions).toEqual(baseline.startPositions)
+      expect(track.startZone).toEqual(baseline.startZone)
+      expect(track.finishLine).toEqual(baseline.finishLine)
+      rampSignatures.add(
+        JSON.stringify(track.walls.filter((wall) => wall.role === 'ramp')),
+      )
+      expect(track.centerline).not.toEqual(baseline.centerline)
+    }
+
+    expect(rampSignatures.size).toBeGreaterThan(1)
   })
 
   it('keeps DEFAULT_SEEDS explicit per track', () => {
@@ -220,7 +264,7 @@ describe('reset preserves the loaded layout', () => {
       const track = buildTrack(trackId, 5)
       const sim = new MarbleRaceSimulation(DEFS, track)
       const before = sim.marbleStates()
-      sim.advanceSteps(MATRIX_STEPS)
+      sim.advanceSteps(RESET_STEPS)
       sim.reset(DEFS)
       expect(sim.marbleStates()).toEqual(before)
       expect(sim.track.id).toBe(trackId)
@@ -229,7 +273,7 @@ describe('reset preserves the loaded layout', () => {
   })
 })
 
-describe('headless matrix: 3 tracks x 10 seeds x 60s at counts 2, 10 and 20', () => {
+describe('headless matrix: 3 tracks x 10 seeds x 120s at counts 2, 10 and 20', () => {
   it('reports finishers, finish times, recoveries and DNFs per track and count', () => {
     const counts = [MIN_MARBLES, DEFAULT_MARBLES, MAX_MARBLES]
     for (const trackId of TRACK_IDS) {
@@ -277,6 +321,14 @@ describe('headless matrix: 3 tracks x 10 seeds x 60s at counts 2, 10 and 20', ()
         expect(finishers).toBeGreaterThan(0)
         expect(min).toBeGreaterThan(0)
         expect(max).toBeLessThanOrEqual(MATRIX_SECONDS)
+
+        if (trackId === 'wyrmwood') {
+          expect(finishers).toBe(10 * count)
+          expect(dnfs).toBe(0)
+          expect(unfinished).toBe(0)
+          expect(min).toBeGreaterThanOrEqual(22)
+          expect(max).toBeLessThanOrEqual(41)
+        }
       }
     }
   }, 240_000)

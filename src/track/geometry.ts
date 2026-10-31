@@ -26,6 +26,20 @@ export function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max)
 }
 
+/** World-space corners of a (possibly rotated) rectangle, CCW from bottom-left. */
+export function rectCorners(rect: TrackRect): Point2[] {
+  const { cx, cy, halfW, halfH, angleDeg } = rect
+  return [
+    { x: -halfW, y: -halfH },
+    { x: halfW, y: -halfH },
+    { x: halfW, y: halfH },
+    { x: -halfW, y: halfH },
+  ].map((p) => {
+    const r = rotatePoint(p.x, p.y, angleDeg)
+    return { x: cx + r.x, y: cy + r.y }
+  })
+}
+
 /** Shortest distance from a point to an axis-aligned box. Zero inside. */
 export function pointRectDistance(
   px: number,

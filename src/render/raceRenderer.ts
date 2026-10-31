@@ -7,7 +7,8 @@ import type { RaceCamera } from '../camera/RaceCamera'
 import { MARBLE_RADIUS } from '../config'
 import type { MarbleRaceSimulation } from '../physics/MarbleRaceSimulation'
 import type { RaceState } from '../race/types'
-import type { TrackData } from '../track/track'
+import { rectCorners } from '../track/geometry'
+import type { TrackData, TrackRect } from '../track/track'
 import { getDefaultMarbleConfigs, type MarbleConfig } from '../race/marbleCustomization'
 
 export interface RenderLayout {
@@ -160,6 +161,15 @@ function drawBackground(
   ctx.fillStyle = glowBottom
   ctx.fillRect(0, 0, width, height)
 }
+function traceRect(ctx: CanvasRenderingContext2D, rect: TrackRect): void {
+  const corners = rectCorners(rect)
+  ctx.beginPath()
+  ctx.moveTo(corners[0].x, corners[0].y)
+  for (let i = 1; i < corners.length; i += 1) {
+    ctx.lineTo(corners[i].x, corners[i].y)
+  }
+  ctx.closePath()
+}
 
 function drawTrackInterior(
   ctx: CanvasRenderingContext2D,
@@ -178,6 +188,7 @@ function drawTrackInterior(
   ctx.lineWidth = 1 / unit
   ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)'
   ctx.beginPath()
+
   for (let x = 10; x < width; x += 10) {
     ctx.moveTo(x, 0)
     ctx.lineTo(x, height)
@@ -188,35 +199,53 @@ function drawTrackInterior(
   }
   ctx.stroke()
 
-  ctx.fillStyle = 'rgba(13, 16, 26, 0.92)'
-  ctx.beginPath()
-  for (const wall of track.walls) {
-    ctx.rect(
-      wall.cx - wall.halfW,
-      wall.cy - wall.halfH,
-      wall.halfW * 2,
-      wall.halfH * 2,
+  for (const zone of track.deadZones ?? []) {
+    ctx.fillStyle = 'rgba(2, 3, 6, 0.78)'
+    ctx.fillRect(
+      zone.minX,
+      zone.minY,
+      zone.maxX - zone.minX,
+      zone.maxY - zone.minY,
     )
   }
-  ctx.fill()
+
+  for (const wall of track.walls) {
+    const isChannel = wall.role === 'channel' || wall.role === 'ramp'
+    ctx.fillStyle = isChannel ? 'rgba(48, 54, 68, 0.98)' : 'rgba(13, 16, 26, 0.92)'
+    traceRect(ctx, wall)
+    ctx.fill()
+  }
 
   ctx.strokeStyle = rgba(accent, 0.14)
   ctx.lineWidth = 6 / unit
-  strokeWallOutlines(ctx, track)
+  strokeWallOutlines(ctx, track, false)
   ctx.strokeStyle = rgba(accent, 0.7)
   ctx.lineWidth = 1.6 / unit
-  strokeWallOutlines(ctx, track)
+  strokeWallOutlines(ctx, track, false)
+
+  ctx.strokeStyle = 'rgba(166, 174, 190, 0.2)'
+  ctx.lineWidth = 6 / unit
+  strokeWallOutlines(ctx, track, true)
+  ctx.strokeStyle = 'rgba(190, 198, 212, 0.72)'
+  ctx.lineWidth = 1.4 / unit
+  strokeWallOutlines(ctx, track, true)
 }
 
-function strokeWallOutlines(ctx: CanvasRenderingContext2D, track: TrackData): void {
+function strokeWallOutlines(
+  ctx: CanvasRenderingContext2D,
+  track: TrackData,
+  channel: boolean,
+): void {
   ctx.beginPath()
   for (const wall of track.walls) {
-    ctx.rect(
-      wall.cx - wall.halfW,
-      wall.cy - wall.halfH,
-      wall.halfW * 2,
-      wall.halfH * 2,
-    )
+    const isChannel = wall.role === 'channel' || wall.role === 'ramp'
+    if (isChannel !== channel) continue
+    const corners = rectCorners(wall)
+    ctx.moveTo(corners[0].x, corners[0].y)
+    for (let i = 1; i < corners.length; i += 1) {
+      ctx.lineTo(corners[i].x, corners[i].y)
+    }
+    ctx.closePath()
   }
   ctx.stroke()
 }
@@ -288,18 +317,19 @@ function drawObstacles(
   unit: number,
 ): void {
   for (const bar of track.obstacles.bars) {
-    ctx.save()
-    ctx.translate(bar.cx, bar.cy)
-    ctx.rotate((-bar.angleDeg * Math.PI) / 180)
     ctx.fillStyle = 'rgba(16, 20, 34, 0.95)'
-    ctx.fillRect(-bar.halfW, -bar.halfH, bar.halfW * 2, bar.halfH * 2)
+    traceRect(ctx, bar)
+    ctx.fill()
+
     ctx.strokeStyle = rgba(accent, 0.16)
     ctx.lineWidth = 6 / unit
-    ctx.strokeRect(-bar.halfW, -bar.halfH, bar.halfW * 2, bar.halfH * 2)
+    traceRect(ctx, bar)
+    ctx.stroke()
+
     ctx.strokeStyle = rgba(accent, 0.85)
     ctx.lineWidth = 1.5 / unit
-    ctx.strokeRect(-bar.halfW, -bar.halfH, bar.halfW * 2, bar.halfH * 2)
-    ctx.restore()
+    traceRect(ctx, bar)
+    ctx.stroke()
   }
 
   for (const peg of track.obstacles.pegs) {

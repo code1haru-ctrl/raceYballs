@@ -2,6 +2,7 @@ import { type CSSProperties, useMemo } from 'react'
 import { Check, Sparkles } from 'lucide-react'
 import { TRACKS, type TrackId } from '../data'
 import { buildTrack, DEFAULT_SEEDS } from '../track/generate'
+import { rectCorners } from '../track/geometry'
 import type { TrackData } from '../track/track'
 import { Panel } from './Panel'
 
@@ -48,20 +49,31 @@ function TrackPreview({ track, accent }: { track: TrackData; accent: string }) {
         strokeOpacity={0.35}
         strokeWidth={0.6}
       />
-      {track.walls.map((wall, index) => (
+      {(track.deadZones ?? []).map((zone, index) => (
         <rect
-          key={index}
-          x={wall.cx - wall.halfW}
-          y={height - (wall.cy + wall.halfH)}
-          width={wall.halfW * 2}
-          height={wall.halfH * 2}
-          fill={accent}
-          fillOpacity={0.22}
-          stroke={accent}
-          strokeOpacity={0.5}
-          strokeWidth={0.4}
+          key={`dead${index}`}
+          x={zone.minX}
+          y={height - zone.maxY}
+          width={zone.maxX - zone.minX}
+          height={zone.maxY - zone.minY}
+          fill="rgba(2, 3, 6, 0.75)"
         />
       ))}
+      {track.walls.map((wall, index) => {
+        const isChannel = wall.role === 'channel' || wall.role === 'ramp'
+        const corners = rectCorners(wall).map(p => `${p.x},${height - p.y}`).join(' ')
+        return (
+          <polygon
+            key={index}
+            points={corners}
+            fill={isChannel ? 'rgba(166, 174, 190, 0.45)' : accent}
+            fillOpacity={isChannel ? 1 : 0.22}
+            stroke={isChannel ? 'rgba(190, 198, 212, 0.7)' : accent}
+            strokeOpacity={isChannel ? 1 : 0.5}
+            strokeWidth={0.4}
+          />
+        )
+      })}
       <path
         d={linePath}
         fill="none"

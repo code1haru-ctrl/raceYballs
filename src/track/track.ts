@@ -11,12 +11,16 @@
  * Interior playfield is [0, width] x [0, height].
  */
 
+export type TrackWallRole = 'boundary' | 'channel' | 'ramp'
+
 export interface TrackRect {
   cx: number
   cy: number
   halfW: number
   halfH: number
   angleDeg: number
+  /** Optional visual role; physics treats every wall the same. */
+  role?: TrackWallRole
 }
 
 export interface TrackCircle {
@@ -111,6 +115,8 @@ export interface TrackData {
    * Unused in Phase 2; Phase 3 will follow it for camera work and analysis.
    */
   centerline: TrackPoint[]
+  /** Optional areas outside the racing channel that are deliberately dead. */
+  deadZones?: TrackBounds[]
 }
 
 /** Interior width of the prototype track, in physics units. */

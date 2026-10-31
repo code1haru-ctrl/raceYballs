@@ -63,7 +63,7 @@ export const RECOVERY_CLEARANCE_D = 1.5
 /** Spacing between candidate recovery spots searched along the centerline. */
 export const RECOVERY_SAMPLE_STEP = 0.5
 /** Hard race timeout in simulated seconds; still-racing marbles are DNF. */
-export const HARD_RACE_LIMIT_S = 120
+export const HARD_RACE_LIMIT_S = 180
 
 /**
  * Phase 5 — collision reporting.

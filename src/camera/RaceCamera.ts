@@ -38,7 +38,7 @@ export function projectToScreen(
 
 /** How much world the camera may show when fully zoomed out. */
 const MAX_VISIBLE_WIDTH = 100
-const MAX_VISIBLE_HEIGHT = 200
+const MAX_VISIBLE_HEIGHT = 260
 /** How little world the camera may show when fully zoomed in. */
 const MIN_VISIBLE_WIDTH = 36
 const MIN_VISIBLE_HEIGHT = 44

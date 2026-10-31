@@ -9,7 +9,6 @@ import {
   START_MIN_PAIR_D,
   START_MIN_WALL_D,
   START_POSITIONS,
-  TRACK_HEIGHT,
 } from './generate'
 
 describe('start positions', () => {
@@ -21,7 +20,7 @@ describe('start positions', () => {
 })
 
 describe('Wyrmwood start grid', () => {
-  it('stacks alternating rows of three and two upward for counts 2..20', () => {
+  it('stacks alternating rows of five and four upward for counts 2..20', () => {
     for (let count = MIN_MARBLES; count <= MAX_MARBLES; count += 1) {
       const positions = startPositionsFor(count, 'wyrmwood')
       expect(positions).toHaveLength(count)
@@ -35,7 +34,7 @@ describe('Wyrmwood start grid', () => {
       const expected: number[] = []
       let remaining = count
       while (remaining > 0) {
-        const capacity = expected.length % 2 === 0 ? 3 : 2
+        const capacity = expected.length % 2 === 0 ? 5 : 4
         const take = Math.min(capacity, remaining)
         expected.push(take)
         remaining -= take
@@ -61,10 +60,15 @@ describe('Wyrmwood start grid', () => {
 
       for (let i = 0; i < slots.length; i += 1) {
         const slot = slots[i]
-        expect(slot.x - 14).toBeGreaterThanOrEqual(minWall - epsilon)
-        expect(26 - slot.x).toBeGreaterThanOrEqual(minWall - epsilon)
-        expect(TRACK_HEIGHT - slot.y).toBeGreaterThanOrEqual(minWall - epsilon)
+        expect(slot.x - track.startZone.minX).toBeGreaterThanOrEqual(
+          minWall - epsilon,
+        )
+        expect(track.startZone.maxX - slot.x).toBeGreaterThanOrEqual(
+          minWall - epsilon,
+        )
+        expect(track.height - slot.y).toBeGreaterThanOrEqual(minWall - epsilon)
         expect(slot.y).toBeGreaterThanOrEqual(START_LINE_Y_MAP.wyrmwood)
+        expect(slot.y).toBeLessThanOrEqual(track.startZone.maxY)
 
         for (const bar of track.obstacles.bars) {
           expect(pointRectDistance(slot.x, slot.y, bar)).toBeGreaterThanOrEqual(

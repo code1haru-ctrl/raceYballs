@@ -3,15 +3,18 @@
  *
  * Every track shares one fixed frame — interior bounds, four boundary walls,
  * the variable-size starting grid, the start line, the finish line and the
- * centerline. Seeding may only vary the interior *obstacles* (angled bars and
- * pegs); it can never move a wall, the start zone, the finish line or the
- * centerline. A layout is accepted only if it passes `validateTrack`; the
- * generator makes at most `MAX_ATTEMPTS` seeded attempts and then falls back to
- * a hand-built, known-good layout with a `console.warn`.
+ * centerline. On the obstacle tracks, seeding may only vary the interior
+ * *obstacles* (angled bars, pegs, diamonds, rings and concave walls); it can
+ * never move the arena, the start zone or the finish line. Wyrmwood is the
+ * switchback track: its seeded course varies the ramp angles, ramp walls and
+ * centerline, but the arena, start channel, start grid and finish line stay
+ * fixed. A layout is accepted only if it passes `validateTrack`; the generator
+ * makes at most `MAX_ATTEMPTS` seeded attempts and then falls back to a
+ * hand-built, known-good layout with a `console.warn`.
  *
- * Each track's centerline is a sequence of gates. Obstacles are always built
- * *between* two gates (never past a gate), which keeps the finish-line gate
- * clear of obstacles while leaving the rest of the course lively.
+ * Each obstacle track's centerline is a sequence of gates. Obstacles are always
+ * built *between* two gates (never past a gate), which keeps the finish-line
+ * gate clear of obstacles while leaving the rest of the course lively.
  */
 
 import {
@@ -28,7 +31,19 @@ import { validateTrack } from './validate'
 
 export const TRACK_WIDTH = 40
 export const TRACK_HEIGHT = 146
+export const WYRMWOOD_TRACK_HEIGHT = 240
 const WALL_THICKNESS = 6
+
+const TRACK_HEIGHTS: Record<TrackId, number> = {
+  'wyrmwood': WYRMWOOD_TRACK_HEIGHT,
+  'eldergarde': TRACK_HEIGHT,
+  'ironhallow': TRACK_HEIGHT,
+  'ashenmoor': TRACK_HEIGHT,
+}
+
+export function trackHeightFor(trackId: TrackId): number {
+  return TRACK_HEIGHTS[trackId]
+}
 
 /** Seeded attempts before the hand-built fallback is used. */
 export const MAX_ATTEMPTS = 20
@@ -51,6 +66,7 @@ export const DEFAULT_SEEDS: Record<TrackId, number> = {
 
 /** Y of the start line and the bottom of the shared start zone. */
 export const START_LINE_Y = 124
+export const WYRMWOOD_START_LINE_Y = 216
 
 /** Maximum number of marbles in a row (a row of four is the staggered one). */
 const START_GRID_LANES = 5
@@ -68,6 +84,167 @@ const WYRMWOOD_START_GRID_TOP_MARGIN = START_MIN_WALL_D * MARBLE_DIAMETER + 0.5
 /** Largest row spacing; tighter rows are used only when the count needs them. */
 const START_GRID_MAX_ROW_GAP = 6
 
+export interface RampSegment {
+  /** Floor-span endpoints at the channel walls, in world space. */
+  xStart: number
+  yStart: number
+  xEnd: number
+  yEnd: number
+  angleDeg: number
+}
+
+export interface WyrmwoodCourse {
+  walls: TrackRect[]
+  ramps: RampSegment[]
+  centerline: TrackPoint[]
+}
+
+export const WW_LEFT_WALL_CX = 4.3
+export const WW_RIGHT_WALL_CX = 35.7
+export const WW_WALL_HALF = 0.8
+export const WW_FLOOR_LEFT = WW_LEFT_WALL_CX + WW_WALL_HALF
+export const WW_FLOOR_RIGHT = WW_RIGHT_WALL_CX - WW_WALL_HALF
+/** Inset turn points so recovery has clearance from the side walls. */
+const WW_TURN_LEFT = 10
+const WW_TURN_RIGHT = 30
+const WW_START_CHANNEL_LEFT = 8
+const WW_START_CHANNEL_RIGHT = 32
+const WW_START_CHANNEL_WIDTH = WW_START_CHANNEL_RIGHT - WW_START_CHANNEL_LEFT
+const WW_RAMP_HALF_H = 0.5
+/** Distance from the ramp surface to the advisory marble-centre line. */
+const WW_PATH_LIFT = 4.5
+/** Gap between a ramp's low edge and the wall, so the marble can roll off. */
+const WW_RAMP_GAP = 5
+/** Drop from the start line onto the first ramp. */
+const WW_START_DROP = 8
+/** Vertical drop at each switchback turn. */
+const WW_TURN_DROP = 26
+const WW_BOTTOM_Y = 2.5
+const WW_MIN_ANGLE_DEG = 13
+const WW_MAX_ANGLE_DEG = 14
+
+function surfaceAt(ramp: RampSegment, x: number): number {
+  const span = ramp.xEnd - ramp.xStart
+  if (span === 0) return ramp.yStart
+  const t = (x - ramp.xStart) / span
+  return ramp.yStart + (ramp.yEnd - ramp.yStart) * t
+}
+
+/**
+ * Builds the Wyrmwood switchback frame: a 24-wide start channel for 20 marbles,
+ * then seeded 13..14 degree legs joined by 26-unit drops. The gap between each
+ * ramp's low edge and the opposite wall lets marbles roll off instead of
+ * resting against the wall.
+ */
+function buildWyrmwoodCourse(seed: number): WyrmwoodCourse {
+  const rng = mulberry32((seed ^ 0x85ebca6b) >>> 0)
+  const walls: TrackRect[] = [
+    {
+      cx: WW_LEFT_WALL_CX,
+      cy: WYRMWOOD_START_LINE_Y / 2,
+      halfW: WW_WALL_HALF,
+      halfH: WYRMWOOD_START_LINE_Y / 2,
+      angleDeg: 0,
+      role: 'channel',
+    },
+    {
+      cx: WW_RIGHT_WALL_CX,
+      cy: WYRMWOOD_START_LINE_Y / 2,
+      halfW: WW_WALL_HALF,
+      halfH: WYRMWOOD_START_LINE_Y / 2,
+      angleDeg: 0,
+      role: 'channel',
+    },
+    {
+      cx: WW_START_CHANNEL_LEFT - 1,
+      cy: (WYRMWOOD_START_LINE_Y + WYRMWOOD_TRACK_HEIGHT) / 2,
+      halfW: 1,
+      halfH: (WYRMWOOD_TRACK_HEIGHT - WYRMWOOD_START_LINE_Y) / 2,
+      angleDeg: 0,
+      role: 'channel',
+    },
+    {
+      cx: WW_START_CHANNEL_RIGHT + 1,
+      cy: (WYRMWOOD_START_LINE_Y + WYRMWOOD_TRACK_HEIGHT) / 2,
+      halfW: 1,
+      halfH: (WYRMWOOD_TRACK_HEIGHT - WYRMWOOD_START_LINE_Y) / 2,
+      angleDeg: 0,
+      role: 'channel',
+    },
+  ]
+
+  const ramps: RampSegment[] = []
+  const centerline: TrackPoint[] = [
+    { x: TRACK_WIDTH / 2, y: WYRMWOOD_START_LINE_Y },
+  ]
+  let fromLeft = true
+  let highY = WYRMWOOD_START_LINE_Y - WW_START_DROP
+  let rampIndex = 0
+
+  while (highY > WW_BOTTOM_Y) {
+    const angleDeg = randomInRange(rng, WW_MIN_ANGLE_DEG, WW_MAX_ANGLE_DEG)
+    const angle = (angleDeg * Math.PI) / 180
+    const xStart = fromLeft ? WW_FLOOR_LEFT : WW_FLOOR_RIGHT
+    let xEnd = fromLeft
+      ? WW_FLOOR_RIGHT - WW_RAMP_GAP
+      : WW_FLOOR_LEFT + WW_RAMP_GAP
+    let drop = Math.abs(xEnd - xStart) * Math.tan(angle)
+    if (highY - drop < WW_BOTTOM_Y) {
+      drop = Math.max(highY - WW_BOTTOM_Y, 0.1)
+      const direction = xEnd > xStart ? 1 : -1
+      xEnd = xStart + (direction * drop) / Math.tan(angle)
+    }
+    const yEnd = highY - drop
+    const span = Math.abs(xEnd - xStart)
+
+    walls.push({
+      cx: (xStart + xEnd) / 2,
+      cy: (highY + yEnd) / 2,
+      halfW: span / 2 / Math.cos(angle),
+      halfH: WW_RAMP_HALF_H,
+      angleDeg: xEnd > xStart ? -angleDeg : angleDeg,
+      role: 'ramp',
+    })
+
+    const ramp: RampSegment = { xStart, yStart: highY, xEnd, yEnd, angleDeg }
+    ramps.push(ramp)
+
+    const turnStartX = fromLeft ? WW_TURN_LEFT : WW_TURN_RIGHT
+    const turnEndX = fromLeft ? WW_TURN_RIGHT : WW_TURN_LEFT
+    if (rampIndex === 0) {
+      centerline.push({
+        x: TRACK_WIDTH / 2,
+        y: surfaceAt(ramp, TRACK_WIDTH / 2) + WW_PATH_LIFT,
+      })
+    } else {
+      centerline.push({
+        x: turnStartX,
+        y: surfaceAt(ramp, turnStartX) + WW_PATH_LIFT,
+      })
+    }
+    centerline.push({
+      x: turnEndX,
+      y: surfaceAt(ramp, turnEndX) + WW_PATH_LIFT,
+    })
+
+    highY = yEnd - WW_TURN_DROP
+    fromLeft = !fromLeft
+    rampIndex += 1
+  }
+
+  return { walls, ramps, centerline }
+}
+
+const WYRMWOOD_COURSES = new Map<number, WyrmwoodCourse>()
+
+export function wyrmwoodCourse(seed: number): WyrmwoodCourse {
+  const cached = WYRMWOOD_COURSES.get(seed)
+  if (cached) return cached
+  const course = buildWyrmwoodCourse(seed)
+  WYRMWOOD_COURSES.set(seed, course)
+  return course
+}
+
 /**
  * Deterministic start grid for `count` marbles (2..20).
  *
@@ -83,19 +260,20 @@ export function startPositionsFor(count: number, trackId?: TrackId): { x: number
     Math.max(Math.trunc(count), MIN_MARBLES),
     MAX_MARBLES,
   )
-  const channelWidth = trackId === 'wyrmwood' ? 12 : TRACK_WIDTH
-  const maxLanes = trackId === 'wyrmwood' ? 3 : START_GRID_LANES
+  const channelWidth = trackId === 'wyrmwood' ? WW_START_CHANNEL_WIDTH : TRACK_WIDTH
+  const maxLanes = trackId === 'wyrmwood' ? 5 : START_GRID_LANES
   const lanes = Math.min(maxLanes, total)
   
-  const laneSpacing = trackId === 'wyrmwood'
-    ? (channelWidth - START_MIN_WALL_D * MARBLE_DIAMETER * 2) / (maxLanes - 1)
-    : (channelWidth - START_GRID_MARGIN * 2) / (maxLanes - 1)
+  const laneSpacing =
+    trackId === 'wyrmwood'
+      ? (channelWidth - START_MIN_WALL_D * MARBLE_DIAMETER * 2) / (maxLanes - 1)
+      : (channelWidth - START_GRID_MARGIN * 2) / (maxLanes - 1)
 
   const rowCounts: number[] = []
   let remaining = total
   if (trackId === 'wyrmwood') {
     while (remaining > 0) {
-      const capacity = rowCounts.length % 2 === 0 ? 3 : 2
+      const capacity = rowCounts.length % 2 === 0 ? maxLanes : maxLanes - 1
       const take = Math.min(capacity, remaining)
       rowCounts.push(take)
       remaining -= take
@@ -119,8 +297,9 @@ export function startPositionsFor(count: number, trackId?: TrackId): { x: number
   const bottomY =
     (trackId ? START_LINE_Y_MAP[trackId] : START_LINE_Y) +
     (trackId === 'wyrmwood' ? WYRMWOOD_START_GRID_BOTTOM_OFFSET : START_GRID_BOTTOM_OFFSET)
+  const height = trackId ? trackHeightFor(trackId) : TRACK_HEIGHT
   const topY =
-    TRACK_HEIGHT -
+    height -
     (trackId === 'wyrmwood' ? WYRMWOOD_START_GRID_TOP_MARGIN : START_GRID_TOP_MARGIN)
 
   const rows = rowCounts.length
@@ -139,9 +318,12 @@ export function startPositionsFor(count: number, trackId?: TrackId): { x: number
   for (let row = 0; row < rows; row += 1) {
     const rowCount = rowCounts[row]
     const y = bottomY + rowGap * row
-  const channelLeft = trackId === 'wyrmwood' ? 14 : (TRACK_WIDTH - channelWidth) / 2
-  const leftmost = channelLeft + (channelWidth / 2 - ((rowCount - 1) / 2) * laneSpacing)
-
+    const channelLeft =
+      trackId === 'wyrmwood'
+        ? WW_START_CHANNEL_LEFT
+        : (TRACK_WIDTH - channelWidth) / 2
+    const leftmost =
+      channelLeft + (channelWidth / 2 - ((rowCount - 1) / 2) * laneSpacing)
 
     for (let column = 0; column < rowCount; column += 1) {
       positions.push({ x: leftmost + laneSpacing * column, y })
@@ -188,26 +370,18 @@ interface TrackSpec {
 }
 
 const WYRMWOOD_GATES: Gate[] = [
-  { x: 20, y: 122 },
-  { x: 20, y: 95 },
-  { x: 20, y: 65 },
-  { x: 20, y: 35 },
+  { x: 20, y: WYRMWOOD_START_LINE_Y },
   { x: 20, y: 8 },
 ]
 
 export const START_LINE_Y_MAP: Record<TrackId, number> = {
-  'wyrmwood': 122,
+  'wyrmwood': WYRMWOOD_START_LINE_Y,
   'eldergarde': 124,
   'ironhallow': 124,
   'ashenmoor': 124,
 }
 
-const WYRMWOOD_RECIPES: Recipe[] = [
-  { kind: 'diamond', x: { min: 10, max: 30 }, radius: { min: 2, max: 3 }, angle: [0, 45] },
-  { kind: 'pegs', count: [4, 6], radius: { min: 1, max: 1.5 }, edge: { min: 2, max: 5 } },
-  { kind: 'diamond', x: { min: 10, max: 30 }, radius: { min: 2, max: 3 }, angle: [0, 45] },
-  { kind: 'pegs', count: [4, 6], radius: { min: 1, max: 1.5 }, edge: { min: 2, max: 5 } },
-]
+const WYRMWOOD_RECIPES: Recipe[] = []
 
 const ELDERGARDE_GATES: Gate[] = [
   { x: 20, y: 124 },
@@ -263,25 +437,33 @@ export function trackSpec(trackId: TrackId): TrackSpec {
   return SPECS[trackId]
 }
 
-export function centerlineFor(trackId: TrackId): TrackPoint[] {
+export function centerlineFor(
+  trackId: TrackId,
+  seed: number = DEFAULT_SEEDS[trackId],
+): TrackPoint[] {
+  if (trackId === 'wyrmwood') {
+    return wyrmwoodCourse(normalizeSeed(seed)).centerline.map((point) => ({ ...point }))
+  }
   return SPECS[trackId].gates.map((gate) => ({ x: gate.x, y: gate.y }))
 }
 
-function wallRects(): TrackRect[] {
+function wallRects(height: number): TrackRect[] {
   return [
     {
       cx: -WALL_THICKNESS / 2,
-      cy: TRACK_HEIGHT / 2,
+      cy: height / 2,
       halfW: WALL_THICKNESS / 2,
-      halfH: TRACK_HEIGHT / 2 + WALL_THICKNESS,
+      halfH: height / 2 + WALL_THICKNESS,
       angleDeg: 0,
+      role: 'boundary',
     },
     {
       cx: TRACK_WIDTH + WALL_THICKNESS / 2,
-      cy: TRACK_HEIGHT / 2,
+      cy: height / 2,
       halfW: WALL_THICKNESS / 2,
-      halfH: TRACK_HEIGHT / 2 + WALL_THICKNESS,
+      halfH: height / 2 + WALL_THICKNESS,
       angleDeg: 0,
+      role: 'boundary',
     },
     {
       cx: TRACK_WIDTH / 2,
@@ -289,42 +471,55 @@ function wallRects(): TrackRect[] {
       halfW: TRACK_WIDTH / 2 + WALL_THICKNESS,
       halfH: WALL_THICKNESS / 2,
       angleDeg: 0,
+      role: 'boundary',
     },
     {
       cx: TRACK_WIDTH / 2,
-      cy: TRACK_HEIGHT + WALL_THICKNESS / 2,
+      cy: height + WALL_THICKNESS / 2,
       halfW: TRACK_WIDTH / 2 + WALL_THICKNESS,
       halfH: WALL_THICKNESS / 2,
       angleDeg: 0,
+      role: 'boundary',
     },
   ]
 }
 
-/** Everything except the obstacles is fixed for a track; only obstacles seed. */
+/** Everything except the obstacles is fixed for a track except Wyrmwood's seeded ramps. */
 function baseTrack(
   trackId: TrackId,
   count: number,
+  seed: number = DEFAULT_SEEDS[trackId],
 ): Omit<TrackData, 'obstacles'> {
   const spec = SPECS[trackId]
+  const height = trackHeightFor(trackId)
   const startLineY = START_LINE_Y_MAP[trackId] ?? START_LINE_Y
-  const walls = wallRects()
-  if (trackId === 'wyrmwood') {
-      walls.push({ cx: 13, cy: (startLineY + TRACK_HEIGHT)/2, halfW: 1, halfH: (TRACK_HEIGHT - startLineY)/2, angleDeg: 0 })
-      walls.push({ cx: 27, cy: (startLineY + TRACK_HEIGHT)/2, halfW: 1, halfH: (TRACK_HEIGHT - startLineY)/2, angleDeg: 0 })
+  const walls = wallRects(height)
+  const course = trackId === 'wyrmwood' ? wyrmwoodCourse(seed) : null
+  if (course) {
+    walls.push(...course.walls)
   }
+  const deadZones =
+    trackId === 'wyrmwood'
+      ? [
+          { minX: 0, minY: 0, maxX: WW_FLOOR_LEFT, maxY: WYRMWOOD_START_LINE_Y },
+          { minX: WW_FLOOR_RIGHT, minY: 0, maxX: TRACK_WIDTH, maxY: WYRMWOOD_START_LINE_Y },
+          { minX: 0, minY: WYRMWOOD_START_LINE_Y, maxX: WW_START_CHANNEL_LEFT, maxY: WYRMWOOD_TRACK_HEIGHT },
+          { minX: WW_START_CHANNEL_RIGHT, minY: WYRMWOOD_START_LINE_Y, maxX: TRACK_WIDTH, maxY: WYRMWOOD_TRACK_HEIGHT },
+        ]
+      : undefined
   return {
     id: spec.id,
     name: spec.name,
     width: TRACK_WIDTH,
-    height: TRACK_HEIGHT,
-    bounds: { minX: 0, minY: 0, maxX: TRACK_WIDTH, maxY: TRACK_HEIGHT },
-    walls: walls,
-    startLineY: startLineY,
+    height,
+    bounds: { minX: 0, minY: 0, maxX: TRACK_WIDTH, maxY: height },
+    walls,
+    startLineY,
     startZone: {
-      minX: trackId === 'wyrmwood' ? 14 : 0,
+      minX: trackId === 'wyrmwood' ? WW_START_CHANNEL_LEFT : 0,
       minY: startLineY,
-      maxX: trackId === 'wyrmwood' ? 26 : TRACK_WIDTH,
-      maxY: TRACK_HEIGHT,
+      maxX: trackId === 'wyrmwood' ? WW_START_CHANNEL_RIGHT : TRACK_WIDTH,
+      maxY: height,
     },
     startPositions: startPositionsFor(count, trackId),
     finishLine: {
@@ -332,12 +527,23 @@ function baseTrack(
       zone: { minX: 0, minY: 5, maxX: TRACK_WIDTH, maxY: 11 },
       sensor: { cx: TRACK_WIDTH / 2, cy: 8, halfW: TRACK_WIDTH / 2, halfH: 3 },
     },
-    centerline: centerlineFor(trackId),
+    centerline: centerlineFor(trackId, seed),
+    deadZones,
   }
 }
 
 /** Constructs the interior obstacles for `trackId`, drawing only on `rng`. */
 function buildObstacles(trackId: TrackId, rng: RandomSource): TrackObstacles {
+  if (trackId === 'wyrmwood') {
+    return {
+      bars: [],
+      pegs: [],
+      diamonds: [],
+      rings: [],
+      concaveWalls: [],
+    }
+  }
+
   const spec = SPECS[trackId]
   const bars: TrackRect[] = []
   const pegs: TrackObstacles['pegs'] = []
@@ -445,8 +651,9 @@ function makeTrack(
   trackId: TrackId,
   obstacles: TrackObstacles,
   count: number,
+  seed: number = DEFAULT_SEEDS[trackId],
 ): TrackData {
-  return { ...baseTrack(trackId, count), obstacles }
+  return { ...baseTrack(trackId, count, seed), obstacles }
 }
 
 /**
@@ -501,8 +708,9 @@ function fallbackObstacles(trackId: TrackId): TrackObstacles {
 export function fallbackTrack(
   trackId: TrackId,
   count: number = DEFAULT_MARBLES,
+  seed: number = DEFAULT_SEEDS[trackId],
 ): TrackData {
-  return makeTrack(trackId, fallbackObstacles(trackId), count)
+  return makeTrack(trackId, fallbackObstacles(trackId), count, seed)
 }
 
 /**
@@ -526,15 +734,15 @@ export function buildTrack(
   const rng = mulberry32((normalized + attempt * 0x9e3779b1) >>> 0)
 
   const obstacles = buildObstacles(trackId, rng)
-  const probe = makeTrack(trackId, obstacles, MAX_MARBLES)
+  const probe = makeTrack(trackId, obstacles, MAX_MARBLES, normalized)
   const report = validateTrack(probe, MAX_MARBLES)
-  if (report.valid) return makeTrack(trackId, obstacles, marbleCount)
+  if (report.valid) return makeTrack(trackId, obstacles, marbleCount, normalized)
 
   if (attempt + 1 < MAX_ATTEMPTS) {
     return buildTrack(trackId, normalized, marbleCount, attempt + 1)
   }
 
-  const fallback = fallbackTrack(trackId, marbleCount)
+  const fallback = fallbackTrack(trackId, marbleCount, normalized)
   const fallbackReport = validateTrack(fallback, marbleCount)
   console.warn(
     `[track] ${trackId} seeded generation failed after ${MAX_ATTEMPTS} attempts ` +

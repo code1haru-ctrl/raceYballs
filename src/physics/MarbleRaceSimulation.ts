@@ -345,7 +345,7 @@ export class MarbleRaceSimulation {
 
   private buildWorld(defs: readonly MarbleDefinition[]): World {
     const track = this.track
-    const world = new World({ gravity: { x: 0, y: GRAVITY_Y } })
+    const world = new World({ gravity: { x: 0, y: GRAVITY_Y }, allowSleep: false })
     this.bodies = []
     this.marbleIndexByBody = new Map<Body, number>()
     this.finishFixture = null
@@ -353,7 +353,10 @@ export class MarbleRaceSimulation {
     this.collisionSilencedUntil = new Array(defs.length).fill(0)
 
     for (const wall of track.walls) {
-      const body = world.createBody({ position: { x: wall.cx, y: wall.cy } })
+      const body = world.createBody({
+        position: { x: wall.cx, y: wall.cy },
+        angle: (wall.angleDeg * Math.PI) / 180,
+      })
       body.createFixture({
         shape: new Box(wall.halfW, wall.halfH),
         friction: TRACK_FRICTION,
@@ -398,6 +401,7 @@ export class MarbleRaceSimulation {
       const body = world.createBody({
         type: 'dynamic',
         position: { x: slot.x, y: slot.y },
+        bullet: true,
       })
       body.createFixture({
         shape: new Circle(MARBLE_RADIUS),
