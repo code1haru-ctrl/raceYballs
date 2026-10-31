@@ -98,7 +98,7 @@ const SEALED_TRACK: TrackData = {
     { cx: 10, cy: -2, halfW: 14, halfH: 2, angleDeg: 0 },
     { cx: 10, cy: 22, halfW: 14, halfH: 2, angleDeg: 0 },
   ],
-  obstacles: { bars: [], pegs: [] },
+  obstacles: { bars: [], pegs: [], diamonds: [], rings: [], concaveWalls: [] },
   startLineY: 16,
   startZone: { minX: 0, minY: 16, maxX: 20, maxY: 20 },
   startPositions: [

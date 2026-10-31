@@ -106,6 +106,23 @@ describe('seeded track generation', () => {
     }
   })
 
+  it('builds Wyrmwood diamonds with finite, intended extents', () => {
+    const track = buildTrack('wyrmwood', DEFAULT_SEEDS.wyrmwood)
+    expect(track.obstacles.diamonds.length).toBeGreaterThan(0)
+    for (const diamond of track.obstacles.diamonds) {
+      expect(Number.isFinite(diamond.halfW)).toBe(true)
+      expect(Number.isFinite(diamond.halfH)).toBe(true)
+      expect(diamond.halfH).toBe(diamond.halfW)
+      expect(diamond.halfW).toBeGreaterThanOrEqual(2)
+      expect(diamond.halfW).toBeLessThanOrEqual(3)
+    }
+
+    for (const diamond of fallbackTrack('wyrmwood').obstacles.diamonds) {
+      expect(diamond.halfW).toBe(2)
+      expect(diamond.halfH).toBe(2)
+    }
+  })
+
   it('never moves the fixed frame when only the seed changes', () => {
     for (const trackId of TRACK_IDS) {
       const baseline = frameSignature(trackId, DEFAULT_SEEDS[trackId])
@@ -146,6 +163,7 @@ describe('seeded track generation', () => {
     const broken = {
       ...base,
       obstacles: {
+        ...base.obstacles,
         bars: [...base.obstacles.bars, ...base.obstacles.bars],
         pegs: [
           ...base.obstacles.pegs,

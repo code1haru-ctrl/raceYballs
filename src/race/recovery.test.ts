@@ -24,7 +24,7 @@ const OPEN_TRACK: TrackData = {
     { cx: 20, cy: -3, halfW: 23, halfH: 3, angleDeg: 0 },
     { cx: 20, cy: 63, halfW: 23, halfH: 3, angleDeg: 0 },
   ],
-  obstacles: { bars: [], pegs: [] },
+  obstacles: { bars: [], pegs: [], diamonds: [], rings: [], concaveWalls: [] },
   startLineY: 54,
   startZone: { minX: 0, minY: 54, maxX: 40, maxY: 60 },
   startPositions: [{ x: 20, y: 56 }],
@@ -53,6 +53,9 @@ const SHAFT_TRACK: TrackData = {
       { cx: 24, cy: 30, halfW: 1, halfH: 30, angleDeg: 0 },
     ],
     pegs: [],
+    diamonds: [],
+    rings: [],
+    concaveWalls: [],
   },
 }
 

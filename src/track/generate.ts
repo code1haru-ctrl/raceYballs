@@ -394,10 +394,12 @@ function buildObstacles(trackId: TrackId, rng: RandomSource): TrackObstacles {
         })
       }
     } else if (recipe.kind === 'diamond') {
+      const size = randomInRange(rng, recipe.radius.min, recipe.radius.max)
       diamonds.push({
         cx: xClamp(randomInRange(rng, recipe.x.min, recipe.x.max)),
         cy: (yMin + yMax) / 2,
-        radius: randomInRange(rng, recipe.radius.min, recipe.radius.max),
+        halfW: size,
+        halfH: size,
         angleDeg: randomInRange(rng, recipe.angle[0], recipe.angle[1]),
       })
     } else if (recipe.kind === 'ring') {
@@ -476,7 +478,7 @@ function fallbackObstacles(trackId: TrackId): TrackObstacles {
         angleDeg: 0,
       })
     } else if (recipe.kind === 'diamond') {
-      diamonds.push({ cx: 20, cy, radius: 2, angleDeg: 0 })
+      diamonds.push({ cx: 20, cy, halfW: 2, halfH: 2, angleDeg: 0 })
     } else if (recipe.kind === 'ring') {
       rings.push({ cx: 20, cy, radius: 2, thickness: 1 })
     } else if (recipe.kind === 'concaveWall') {
