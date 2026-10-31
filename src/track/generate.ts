@@ -23,7 +23,7 @@ import {
 import type { TrackId } from '../data'
 import { mulberry32, randomInRange, randomIntInRange, type RandomSource } from './rng'
 import { normalizeSeed } from './seed'
-import type { TrackObstacles, TrackPoint, TrackRect, TrackData } from './track'
+import type { TrackObstacles, TrackPoint, TrackRect, TrackData, TrackDiamond, TrackRing, TrackConcaveWall } from './track'
 import { validateTrack } from './validate'
 
 export const TRACK_WIDTH = 40
@@ -150,6 +150,9 @@ type Recipe =
       angle: [number, number]
     }
   | { kind: 'pegs'; count: [number, number]; radius: Interval; edge: Interval }
+  | { kind: 'diamond'; x: Interval; radius: Interval; angle: [number, number] }
+  | { kind: 'ring'; x: Interval; radius: Interval; thickness: Interval }
+  | { kind: 'concaveWall'; side: 'left' | 'right'; x: Interval; concavity: Interval }
   | { kind: 'empty' }
 
 interface TrackSpec {
@@ -292,6 +295,9 @@ function buildObstacles(trackId: TrackId, rng: RandomSource): TrackObstacles {
   const spec = SPECS[trackId]
   const bars: TrackRect[] = []
   const pegs: TrackObstacles['pegs'] = []
+  const diamonds: TrackDiamond[] = []
+  const rings: TrackRing[] = []
+  const concaveWalls: TrackConcaveWall[] = []
   const xClamp = (value: number): number =>
     Math.min(Math.max(value, 2.5), TRACK_WIDTH - 2.5)
 
@@ -327,7 +333,7 @@ function buildObstacles(trackId: TrackId, rng: RandomSource): TrackObstacles {
         halfH: 0.7,
         angleDeg: randomInRange(rng, recipe.angle[0], recipe.angle[1]),
       })
-    } else {
+    } else if (recipe.kind === 'pegs') {
       const count = randomIntInRange(rng, recipe.count[0], recipe.count[1])
       // Spread pegs down the interval, alternating which edge they hug, and
       // keep every peg at least the required gap from its neighbours.
@@ -341,6 +347,29 @@ function buildObstacles(trackId: TrackId, rng: RandomSource): TrackObstacles {
           radius: randomInRange(rng, recipe.radius.min, recipe.radius.max),
         })
       }
+    } else if (recipe.kind === 'diamond') {
+      diamonds.push({
+        cx: xClamp(randomInRange(rng, recipe.x.min, recipe.x.max)),
+        cy: (yMin + yMax) / 2,
+        radius: randomInRange(rng, recipe.radius.min, recipe.radius.max),
+        angleDeg: randomInRange(rng, recipe.angle[0], recipe.angle[1]),
+      })
+    } else if (recipe.kind === 'ring') {
+      rings.push({
+        cx: xClamp(randomInRange(rng, recipe.x.min, recipe.x.max)),
+        cy: (yMin + yMax) / 2,
+        radius: randomInRange(rng, recipe.radius.min, recipe.radius.max),
+        thickness: randomInRange(rng, recipe.thickness.min, recipe.thickness.max),
+      })
+    } else if (recipe.kind === 'concaveWall') {
+      concaveWalls.push({
+        cx: recipe.side === 'left' ? 0 : TRACK_WIDTH,
+        cy: (yMin + yMax) / 2,
+        halfW: 5,
+        halfH: (yMax - yMin) / 2,
+        angleDeg: 0,
+        concavity: randomInRange(rng, recipe.concavity.min, recipe.concavity.max),
+      })
     }
   }
 
@@ -361,7 +390,7 @@ function buildObstacles(trackId: TrackId, rng: RandomSource): TrackObstacles {
     halfH: 0.7, 
     angleDeg: randomInRange(rng, -45, 45) 
   })
-  return { bars, pegs }
+  return { bars, pegs, diamonds, rings, concaveWalls }
 }
 
 function makeTrack(
@@ -380,6 +409,9 @@ function fallbackObstacles(trackId: TrackId): TrackObstacles {
   const spec = SPECS[trackId]
   const bars: TrackRect[] = []
   const pegs: TrackObstacles['pegs'] = []
+  const diamonds: TrackDiamond[] = []
+  const rings: TrackRing[] = []
+  const concaveWalls: TrackConcaveWall[] = []
   for (let i = 0; i < spec.gates.length - 1; i += 1) {
     const recipe = spec.recipes[i]
     if (!recipe || recipe.kind === 'empty') continue
@@ -397,11 +429,24 @@ function fallbackObstacles(trackId: TrackId): TrackObstacles {
         halfH: 0.7,
         angleDeg: 0,
       })
+    } else if (recipe.kind === 'diamond') {
+      diamonds.push({ cx: 20, cy, radius: 2, angleDeg: 0 })
+    } else if (recipe.kind === 'ring') {
+      rings.push({ cx: 20, cy, radius: 2, thickness: 1 })
+    } else if (recipe.kind === 'concaveWall') {
+      concaveWalls.push({
+        cx: recipe.side === 'left' ? 0 : TRACK_WIDTH,
+        cy,
+        halfW: 5,
+        halfH: 5,
+        angleDeg: 0,
+        concavity: 0.5,
+      })
     } else {
       bars.push({ cx: 20, cy, halfW: 6, halfH: 0.7, angleDeg: 0 })
     }
   }
-  return { bars, pegs }
+  return { bars, pegs, diamonds, rings, concaveWalls }
 }
 
 /** The hand-built fallback track for `trackId` (used when seeding fails). */
