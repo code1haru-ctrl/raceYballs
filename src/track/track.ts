@@ -11,7 +11,13 @@
  * Interior playfield is [0, width] x [0, height].
  */
 
-export type TrackWallRole = 'boundary' | 'channel' | 'ramp'
+export type TrackWallRole =
+  | 'boundary'
+  | 'channel'
+  | 'ramp'
+  | 'island'
+  | 'teeth'
+  | 'deflector'
 
 export interface TrackRect {
   cx: number
@@ -72,6 +78,15 @@ export interface TrackBounds {
 }
 
 /** Non-wall course furniture a marble can bounce off. */
+export interface TrackSpinner {
+  cx: number
+  cy: number
+  halfW: number
+  halfH: number
+  angleDeg: number
+  angularVelocity: number
+}
+
 export interface TrackObstacles {
   /** Angled deflector bars. */
   bars: TrackRect[]
@@ -83,6 +98,10 @@ export interface TrackObstacles {
   rings: TrackRing[]
   /** Concave wall segments. */
   concaveWalls: TrackConcaveWall[]
+  /** Short slanted teeth bars, grouped visually into rows. */
+  teeth: TrackRect[]
+  /** Rotating spinners. */
+  spinners: TrackSpinner[]
 }
 
 /** The line a marble must cross to be recorded as a finisher. */
@@ -181,6 +200,8 @@ export const PROTOTYPE_TRACK: TrackData = {
       diamonds: [],
       rings: [],
       concaveWalls: [],
+      teeth: [],
+      spinners: [],
     },
   startLineY: 124,
   startZone: { minX: 0, minY: 124, maxX: TRACK_WIDTH, maxY: TRACK_HEIGHT },

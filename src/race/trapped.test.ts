@@ -40,10 +40,13 @@ const TRAP_TRACK: TrackData = {
     ],
     pegs: [],
     diamonds: [],
-    rings: [],
-    concaveWalls: [],
-  },
+      rings: [],
+      concaveWalls: [],
+      teeth: [],
+      spinners: [],
+    },
   startLineY: 54,
+
   startZone: { minX: 0, minY: 54, maxX: 40, maxY: 60 },
   startPositions: [
     { x: 6, y: 32 },
@@ -77,6 +80,8 @@ const SHAFT_TRACK: TrackData = {
     diamonds: [],
     rings: [],
     concaveWalls: [],
+    teeth: [],
+    spinners: [],
   },
   startPositions: [{ x: 20, y: 50 }],
   centerline: [

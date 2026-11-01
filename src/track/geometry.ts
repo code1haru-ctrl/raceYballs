@@ -6,7 +6,7 @@
  * module turns the resulting data into Planck bodies; it never uses these.
  */
 
-import type { TrackCircle, TrackRect } from './track'
+import type { TrackCircle, TrackDiamond, TrackRect } from './track'
 
 export interface Point2 {
   x: number
@@ -101,4 +101,78 @@ export function circlesSeparatedBy(
   gap: number,
 ): boolean {
   return Math.hypot(ax - bx, ay - by) >= aRadius + bRadius + gap
+}
+
+/**
+ * World-space corners of a diamond island, CCW from the top point.
+ * `halfW`/`halfH` are the distances from the centre to the side points and
+ * the top/bottom points respectively.
+ */
+export function diamondCorners(diamond: TrackDiamond): Point2[] {
+  const { cx, cy, halfW, halfH, angleDeg } = diamond
+  return [
+    { x: 0, y: halfH },
+    { x: -halfW, y: 0 },
+    { x: 0, y: -halfH },
+    { x: halfW, y: 0 },
+  ].map((p) => {
+    const r = rotatePoint(p.x, p.y, angleDeg)
+    return { x: cx + r.x, y: cy + r.y }
+  })
+}
+
+function pointSegmentDistance(
+  px: number,
+  py: number,
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
+): number {
+  const dx = bx - ax
+  const dy = by - ay
+  const lengthSq = dx * dx + dy * dy
+  if (lengthSq === 0) return Math.hypot(px - ax, py - ay)
+  const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / lengthSq))
+  return Math.hypot(px - (ax + t * dx), py - (ay + t * dy))
+}
+
+/** True when a point lies inside a simple polygon (ray casting). */
+export function pointInPolygon(px: number, py: number, points: readonly Point2[]): boolean {
+  let inside = false
+  for (let i = 0, j = points.length - 1; i < points.length; j = i, i += 1) {
+    const a = points[i]
+    const b = points[j]
+    const intersects =
+      a.y > py !== b.y > py &&
+      px < ((b.x - a.x) * (py - a.y)) / (b.y - a.y) + a.x
+    if (intersects) inside = !inside
+  }
+  return inside
+}
+
+/** Shortest distance from a point to a polygon edge. Zero inside. */
+export function pointPolygonDistance(
+  px: number,
+  py: number,
+  points: readonly Point2[],
+): number {
+  if (points.length === 0) return Number.POSITIVE_INFINITY
+  if (pointInPolygon(px, py, points)) return 0
+  let nearest = Number.POSITIVE_INFINITY
+  for (let i = 0; i < points.length; i += 1) {
+    const a = points[i]
+    const b = points[(i + 1) % points.length]
+    nearest = Math.min(nearest, pointSegmentDistance(px, py, a.x, a.y, b.x, b.y))
+  }
+  return nearest
+}
+
+/** Shortest distance from a point to a diamond island. Zero inside. */
+export function pointDiamondDistance(
+  px: number,
+  py: number,
+  diamond: TrackDiamond,
+): number {
+  return pointPolygonDistance(px, py, diamondCorners(diamond))
 }

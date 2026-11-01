@@ -26,6 +26,7 @@ import {
   circleOverlapsCircle,
   circleOverlapsRect,
   circlesSeparatedBy,
+  pointDiamondDistance,
   pointRectDistance,
 } from './geometry'
 import type { TrackCircle, TrackData, TrackRect } from './track'
@@ -38,14 +39,29 @@ export interface ValidationReport {
 }
 
 function rectsSeparatedBy(a: TrackRect, b: TrackRect, gap: number): boolean {
-  // Conservative test: compare the two centre-to-centre distances along each
-  // rotation, using the larger half-extent. Adequate for the shallow bar
-  // angles used here and never accepts an overlapping pair.
-  const dx = Math.abs(a.cx - b.cx)
-  const dy = Math.abs(a.cy - b.cy)
-  const reachX = a.halfW + b.halfW
-  const reachY = a.halfH + b.halfH
-  return dx >= reachX + gap || dy >= reachY + gap
+  const ca = Math.cos((a.angleDeg * Math.PI) / 180)
+  const sa = Math.sin((a.angleDeg * Math.PI) / 180)
+  const cb = Math.cos((b.angleDeg * Math.PI) / 180)
+  const sb = Math.sin((b.angleDeg * Math.PI) / 180)
+  const axes = [
+    { x: ca, y: sa },
+    { x: -sa, y: ca },
+    { x: cb, y: sb },
+    { x: -sb, y: cb },
+  ]
+  for (const axis of axes) {
+    const ra =
+      Math.abs(axis.x * ca + axis.y * sa) * a.halfW +
+      Math.abs(axis.x * -sa + axis.y * ca) * a.halfH
+    const rb =
+      Math.abs(axis.x * cb + axis.y * sb) * b.halfW +
+      Math.abs(axis.x * -sb + axis.y * cb) * b.halfH
+    const distance = Math.abs(
+      (b.cx - a.cx) * axis.x + (b.cy - a.cy) * axis.y,
+    )
+    if (distance > ra + rb + gap) return true
+  }
+  return false
 }
 
 function rectCircleSeparatedBy(
@@ -144,10 +160,20 @@ export function validateTrack(
         violations.push(`start slot ${i} is closer than ${START_MIN_OBSTACLE_D}D to a bar`)
       }
     }
+    for (const tooth of track.obstacles.teeth) {
+      if (pointRectDistance(a.x, a.y, tooth) < minObstacle) {
+        violations.push(`start slot ${i} is closer than ${START_MIN_OBSTACLE_D}D to a tooth`)
+      }
+    }
     for (const peg of track.obstacles.pegs) {
       const centreGap = Math.hypot(a.x - peg.cx, a.y - peg.cy) - peg.radius
       if (centreGap < minObstacle) {
         violations.push(`start slot ${i} is closer than ${START_MIN_OBSTACLE_D}D to a peg`)
+      }
+    }
+    for (const diamond of track.obstacles.diamonds) {
+      if (pointDiamondDistance(a.x, a.y, diamond) < minObstacle) {
+        violations.push(`start slot ${i} is closer than ${START_MIN_OBSTACLE_D}D to an island`)
       }
     }
     for (let j = i + 1; j < track.startPositions.length; j += 1) {
@@ -164,14 +190,6 @@ export function validateTrack(
     for (let j = i + 1; j < track.obstacles.bars.length; j += 1) {
       if (!rectsSeparatedBy(track.obstacles.bars[i], track.obstacles.bars[j], gap)) {
         violations.push(`bars ${i} and ${j} are closer than ${OBSTACLE_MIN_GAP_D}D`)
-      }
-      if (circleOverlapsRect(
-        track.obstacles.bars[j].cx,
-        track.obstacles.bars[j].cy,
-        Math.max(track.obstacles.bars[j].halfW, track.obstacles.bars[j].halfH),
-        track.obstacles.bars[i],
-      )) {
-        violations.push(`bars ${i} and ${j} overlap`)
       }
     }
   }
@@ -216,6 +234,32 @@ export function validateTrack(
     }
   }
 
+  // --- Spinners: every swept circle must either nearly seal against a wall
+  // (<= 0.3) or leave a real passage (>= 1.0D). Overlap is never allowed.
+  for (let i = 0; i < track.obstacles.spinners.length; i += 1) {
+    const spinner = track.obstacles.spinners[i]
+    const swept = Math.hypot(spinner.halfW, spinner.halfH)
+    for (let w = 0; w < track.walls.length; w += 1) {
+      const gap = pointRectDistance(spinner.cx, spinner.cy, track.walls[w]) - swept
+      if (gap < -0.05) {
+        violations.push(`spinner ${i} overlaps wall ${w}`)
+      } else if (gap > 0.3 && gap < START_MIN_WALL_D * D) {
+        violations.push(`spinner ${i} leaves a partial gap of ${gap.toFixed(2)} to wall ${w}`)
+      }
+    }
+    for (let j = i + 1; j < track.obstacles.spinners.length; j += 1) {
+      const other = track.obstacles.spinners[j]
+      const otherSwept = Math.hypot(other.halfW, other.halfH)
+      const gap =
+        Math.hypot(spinner.cx - other.cx, spinner.cy - other.cy) -
+        swept -
+        otherSwept
+      if (gap < -0.05) {
+        violations.push(`spinners ${i} and ${j} overlap`)
+      }
+    }
+  }
+
   // --- Centerline clearance: obstacles must stand off the racing line.
   const lineClearance = CENTERLINE_CLEARANCE_D * (D / 2)
   for (let i = 0; i < track.centerline.length; i += 1) {
@@ -225,9 +269,19 @@ export function validateTrack(
         violations.push(`centerline point ${i} is closer than ${CENTERLINE_CLEARANCE_D}D to a bar`)
       }
     }
+    for (const tooth of track.obstacles.teeth) {
+      if (pointRectDistance(point.x, point.y, tooth) < lineClearance) {
+        violations.push(`centerline point ${i} is closer than ${CENTERLINE_CLEARANCE_D}D to a tooth`)
+      }
+    }
     for (const peg of track.obstacles.pegs) {
       if (Math.hypot(point.x - peg.cx, point.y - peg.cy) - peg.radius < lineClearance) {
         violations.push(`centerline point ${i} is closer than ${CENTERLINE_CLEARANCE_D}D to a peg`)
+      }
+    }
+    for (const diamond of track.obstacles.diamonds) {
+      if (pointDiamondDistance(point.x, point.y, diamond) < lineClearance) {
+        violations.push(`centerline point ${i} is closer than ${CENTERLINE_CLEARANCE_D}D to an island`)
       }
     }
   }

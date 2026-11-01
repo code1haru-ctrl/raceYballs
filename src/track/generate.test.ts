@@ -57,6 +57,8 @@ function seedSignature(
     diamonds: track.obstacles.diamonds,
     rings: track.obstacles.rings,
     concaveWalls: track.obstacles.concaveWalls,
+    teeth: track.obstacles.teeth,
+    spinners: track.obstacles.spinners,
   })
 }
 

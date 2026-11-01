@@ -7,7 +7,7 @@ import type { RaceCamera } from '../camera/RaceCamera'
 import { MARBLE_RADIUS } from '../config'
 import type { MarbleRaceSimulation } from '../physics/MarbleRaceSimulation'
 import type { RaceState } from '../race/types'
-import { rectCorners } from '../track/geometry'
+import { diamondCorners, rectCorners } from '../track/geometry'
 import type { TrackData, TrackRect } from '../track/track'
 import { getDefaultMarbleConfigs, type MarbleConfig } from '../race/marbleCustomization'
 
@@ -115,7 +115,7 @@ export function drawRace(
   applyWorldTransform(ctx, view, { width, height })
   drawTrackInterior(ctx, sim.track, theme.accent, view.scale)
   drawStartAndFinish(ctx, sim.track, theme.accent, view.scale)
-  drawObstacles(ctx, sim.track, theme.accent, view.scale)
+  drawObstacles(ctx, sim.track, theme.accent, view.scale, sim.spinnerAngles())
   drawMarbles(ctx, sim, configById)
   ctx.restore()
 
@@ -315,6 +315,7 @@ function drawObstacles(
   track: TrackData,
   accent: string,
   unit: number,
+  spinnerAngles: readonly number[],
 ): void {
   for (const bar of track.obstacles.bars) {
     ctx.fillStyle = 'rgba(16, 20, 34, 0.95)'
@@ -332,6 +333,16 @@ function drawObstacles(
     ctx.stroke()
   }
 
+  for (const tooth of track.obstacles.teeth) {
+    ctx.fillStyle = 'rgba(16, 20, 34, 0.95)'
+    traceRect(ctx, tooth)
+    ctx.fill()
+    ctx.strokeStyle = rgba(accent, 0.7)
+    ctx.lineWidth = 1.2 / unit
+    traceRect(ctx, tooth)
+    ctx.stroke()
+  }
+
   for (const peg of track.obstacles.pegs) {
     ctx.beginPath()
     ctx.arc(peg.cx, peg.cy, peg.radius, 0, Math.PI * 2)
@@ -342,6 +353,46 @@ function drawObstacles(
     ctx.stroke()
     ctx.strokeStyle = rgba(accent, 0.85)
     ctx.lineWidth = 1.5 / unit
+    ctx.stroke()
+  }
+
+  for (const diamond of track.obstacles.diamonds) {
+    const corners = diamondCorners(diamond)
+    ctx.beginPath()
+    ctx.moveTo(corners[0].x, corners[0].y)
+    for (let i = 1; i < corners.length; i += 1) ctx.lineTo(corners[i].x, corners[i].y)
+    ctx.closePath()
+    ctx.fillStyle = 'rgba(21, 17, 32, 0.96)'
+    ctx.fill()
+    ctx.strokeStyle = rgba(accent, 0.22)
+    ctx.lineWidth = 6 / unit
+    ctx.stroke()
+    ctx.strokeStyle = rgba(accent, 0.9)
+    ctx.lineWidth = 1.6 / unit
+    ctx.stroke()
+  }
+
+  for (let i = 0; i < track.obstacles.spinners.length; i += 1) {
+    const spinner = track.obstacles.spinners[i]
+    const angle = spinnerAngles[i] ?? (spinner.angleDeg * Math.PI) / 180
+    const rect: TrackRect = {
+      cx: spinner.cx,
+      cy: spinner.cy,
+      halfW: spinner.halfW,
+      halfH: spinner.halfH,
+      angleDeg: (angle * 180) / Math.PI,
+      role: 'deflector',
+    }
+    ctx.fillStyle = 'rgba(26, 17, 34, 0.98)'
+    traceRect(ctx, rect)
+    ctx.fill()
+    ctx.strokeStyle = rgba(accent, 0.25)
+    ctx.lineWidth = 7 / unit
+    traceRect(ctx, rect)
+    ctx.stroke()
+    ctx.strokeStyle = rgba(accent, 0.95)
+    ctx.lineWidth = 1.8 / unit
+    traceRect(ctx, rect)
     ctx.stroke()
   }
 }

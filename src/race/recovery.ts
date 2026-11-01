@@ -23,7 +23,7 @@ import {
   RECOVERY_CLEARANCE_D,
   RECOVERY_SAMPLE_STEP,
 } from '../config'
-import { pointRectDistance } from '../track/geometry'
+import { pointDiamondDistance, pointRectDistance } from '../track/geometry'
 import type { TrackData } from '../track/track'
 import { CenterlinePath } from './progress'
 import { StuckDetector, type StuckSample } from './stuck'
@@ -74,8 +74,23 @@ export function geometryClearance(
   for (const bar of track.obstacles.bars) {
     nearest = Math.min(nearest, pointRectDistance(x, y, bar))
   }
+  for (const tooth of track.obstacles.teeth) {
+    nearest = Math.min(nearest, pointRectDistance(x, y, tooth))
+  }
   for (const peg of track.obstacles.pegs) {
     nearest = Math.min(nearest, Math.hypot(x - peg.cx, y - peg.cy) - peg.radius)
+  }
+  for (const diamond of track.obstacles.diamonds) {
+    nearest = Math.min(nearest, pointDiamondDistance(x, y, diamond))
+  }
+  for (const spinner of track.obstacles.spinners) {
+    // Recovery must never drop a marble into (or just beside) a spinner's
+    // swept disc: the candidate also has to clear the disc by 1.5D.
+    const sweptRadius = Math.hypot(spinner.halfW, spinner.halfH)
+    nearest = Math.min(
+      nearest,
+      Math.hypot(x - spinner.cx, y - spinner.cy) - sweptRadius,
+    )
   }
 
   if (!Number.isFinite(nearest)) return Number.POSITIVE_INFINITY

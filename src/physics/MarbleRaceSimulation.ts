@@ -1,6 +1,7 @@
 import {
   Box,
   Circle,
+  Polygon,
   World,
   type Body,
   type Contact,
@@ -105,6 +106,9 @@ export class MarbleRaceSimulation {
 
   private world: World
   private bodies: Body[] = []
+  private spinnerBodies: Body[] = []
+  private spinnerBaseAngles: number[] = []
+  private spinnerAngularVelocities: number[] = []
   private marbleIndexByBody = new Map<Body, number>()
   private finishFixture: Fixture | null = null
   private simTime = 0
@@ -166,6 +170,16 @@ export class MarbleRaceSimulation {
     return this.completed
   }
 
+  /** Current angles of every spinner, in radians (world/Planck convention). */
+  spinnerAngles(): number[] {
+    return this.spinnerBodies.map((body) => body.getAngle())
+  }
+
+  /** Current angular speeds of every spinner, in radians per second. */
+  spinnerSpeeds(): number[] {
+    return [...this.spinnerAngularVelocities]
+  }
+
   /** Marbles that have not finished and are still influencing the race. */
   activeMarbles(): MarbleRuntime[] {
     const active: MarbleRuntime[] = []
@@ -219,6 +233,11 @@ export class MarbleRaceSimulation {
       marble.prevX = marble.x
       marble.prevY = marble.y
     }
+
+    // Spinners are kinematic and their angle is a pure function of simulation
+    // time, so a given (track, seed, step count) always produces the same
+    // angles and a Reset rebuilds the world at the authored start angles.
+    this.updateSpinners(this.simTime)
 
     this.world.step(dt, VELOCITY_ITERATIONS, POSITION_ITERATIONS)
 
@@ -347,6 +366,9 @@ export class MarbleRaceSimulation {
     const track = this.track
     const world = new World({ gravity: { x: 0, y: GRAVITY_Y }, allowSleep: false })
     this.bodies = []
+    this.spinnerBodies = []
+    this.spinnerBaseAngles = []
+    this.spinnerAngularVelocities = []
     this.marbleIndexByBody = new Map<Body, number>()
     this.finishFixture = null
     this.approachSpeeds = new WeakMap<Contact, number>()
@@ -376,10 +398,56 @@ export class MarbleRaceSimulation {
       })
     }
 
+    for (const tooth of track.obstacles.teeth) {
+      const body = world.createBody({
+        position: { x: tooth.cx, y: tooth.cy },
+        angle: (tooth.angleDeg * Math.PI) / 180,
+      })
+      body.createFixture({
+        shape: new Box(tooth.halfW, tooth.halfH),
+        friction: TRACK_FRICTION,
+        restitution: BAR_RESTITUTION,
+      })
+    }
+
+    for (const spinner of track.obstacles.spinners) {
+      const body = world.createBody({
+        type: 'kinematic',
+        position: { x: spinner.cx, y: spinner.cy },
+        angle: (spinner.angleDeg * Math.PI) / 180,
+      })
+      body.createFixture({
+        shape: new Box(spinner.halfW, spinner.halfH),
+        friction: TRACK_FRICTION,
+        restitution: BAR_RESTITUTION,
+      })
+      body.setAngularVelocity(spinner.angularVelocity)
+      this.spinnerBodies.push(body)
+      this.spinnerBaseAngles.push((spinner.angleDeg * Math.PI) / 180)
+      this.spinnerAngularVelocities.push(spinner.angularVelocity)
+    }
+
     for (const peg of track.obstacles.pegs) {
       const body = world.createBody({ position: { x: peg.cx, y: peg.cy } })
       body.createFixture({
         shape: new Circle(peg.radius),
+        friction: TRACK_FRICTION,
+        restitution: BAR_RESTITUTION,
+      })
+    }
+
+    for (const diamond of track.obstacles.diamonds) {
+      const body = world.createBody({
+        position: { x: diamond.cx, y: diamond.cy },
+        angle: (diamond.angleDeg * Math.PI) / 180,
+      })
+      body.createFixture({
+        shape: new Polygon([
+          { x: 0, y: diamond.halfH },
+          { x: -diamond.halfW, y: 0 },
+          { x: 0, y: -diamond.halfH },
+          { x: diamond.halfW, y: 0 },
+        ]),
         friction: TRACK_FRICTION,
         restitution: BAR_RESTITUTION,
       })
@@ -518,6 +586,15 @@ export class MarbleRaceSimulation {
 
   private isCollisionSilenced(index: number): boolean {
     return this.simTime < (this.collisionSilencedUntil[index] ?? 0)
+  }
+
+  private updateSpinners(timeSec: number): void {
+    for (let i = 0; i < this.spinnerBodies.length; i += 1) {
+      const body = this.spinnerBodies[i]
+      const angle = this.spinnerBaseAngles[i] + this.spinnerAngularVelocities[i] * timeSec
+      body.setTransform(body.getPosition(), angle)
+      body.setAngularVelocity(this.spinnerAngularVelocities[i])
+    }
   }
 
   private recordFinish(index: number): void {

@@ -26,18 +26,19 @@ import {
 import type { TrackId } from '../data'
 import { mulberry32, randomInRange, randomIntInRange, type RandomSource } from './rng'
 import { normalizeSeed } from './seed'
-import type { TrackObstacles, TrackPoint, TrackRect, TrackData, TrackDiamond, TrackRing, TrackConcaveWall } from './track'
+import type { TrackObstacles, TrackPoint, TrackRect, TrackData, TrackDiamond, TrackRing, TrackConcaveWall, TrackSpinner } from './track'
 import { validateTrack } from './validate'
 
 export const TRACK_WIDTH = 40
 export const TRACK_HEIGHT = 146
 export const WYRMWOOD_TRACK_HEIGHT = 240
+export const IRONHALLOW_TRACK_HEIGHT = 240
 const WALL_THICKNESS = 6
 
 const TRACK_HEIGHTS: Record<TrackId, number> = {
   'wyrmwood': WYRMWOOD_TRACK_HEIGHT,
   'eldergarde': TRACK_HEIGHT,
-  'ironhallow': TRACK_HEIGHT,
+  'ironhallow': IRONHALLOW_TRACK_HEIGHT,
   'ashenmoor': TRACK_HEIGHT,
 }
 
@@ -67,6 +68,7 @@ export const DEFAULT_SEEDS: Record<TrackId, number> = {
 /** Y of the start line and the bottom of the shared start zone. */
 export const START_LINE_Y = 124
 export const WYRMWOOD_START_LINE_Y = 216
+export const IRONHALLOW_START_LINE_Y = 216
 
 /** Maximum number of marbles in a row (a row of four is the staggered one). */
 const START_GRID_LANES = 5
@@ -245,6 +247,208 @@ export function wyrmwoodCourse(seed: number): WyrmwoodCourse {
   return course
 }
 
+/* ------------------------------------------------------------------------- *
+ * Ironhallow
+ *
+ * The spec (reference/ironhallow-spec.md) describes a 40 x 160 image, y from
+ * the top. Ironhallow keeps the 240-tall arena, so every spec coordinate is
+ * converted with `yWorld = 240 - 1.5 * ySpec`. The course is a real polyline
+ * channel: the two boundary polylines below are the *inner* faces of the
+ * channel walls, and the space outside them is dead area. The ten spec
+ * sections all exist, and the course is deliberately harder than the spec:
+ * three teeth rows instead of two, a second spinner row, three islands and a
+ * denser peg field.
+ * ------------------------------------------------------------------------- */
+
+const IH_WALL = 0.8
+export const IH_START_LEFT = 14
+export const IH_START_RIGHT = 26
+export const IH_START_WIDTH = IH_START_RIGHT - IH_START_LEFT
+export const IH_START_CLEAR_HEIGHT = 24
+
+type BoundarySide = 'left' | 'right'
+
+/** Inner faces of the left channel wall, top to bottom. */
+const IH_LEFT_BOUNDARY: TrackPoint[] = [
+  { x: 14, y: 240 },
+  { x: 14, y: 216 },
+  { x: 4, y: 199.5 },
+  { x: 12, y: 192 },
+  { x: 12, y: 170 },
+  { x: 4, y: 163 },
+  { x: 2, y: 160.5 },
+  { x: 2, y: 123 },
+  { x: 12, y: 103 },
+  { x: 2.5, y: 100 },
+  { x: 2.5, y: 89 },
+  { x: 9.65, y: 87.5 },
+  { x: 9.65, y: 69.5 },
+  { x: 11, y: 66 },
+  { x: 11, y: 46 },
+  { x: 4, y: 42 },
+  { x: 4, y: 28 },
+  { x: 14, y: 15 },
+  { x: 14, y: 0 },
+]
+
+/** Inner faces of the right channel wall, top to bottom. */
+const IH_RIGHT_BOUNDARY: TrackPoint[] = [
+  { x: 26, y: 240 },
+  { x: 26, y: 216 },
+  { x: 14, y: 199.5 },
+  { x: 34, y: 192 },
+  { x: 34, y: 170 },
+  { x: 26, y: 163 },
+  { x: 38, y: 160.5 },
+  { x: 38, y: 123 },
+  { x: 34, y: 103 },
+  { x: 37.5, y: 100 },
+  { x: 37.5, y: 89 },
+  { x: 38, y: 87.5 },
+  { x: 38, y: 69.5 },
+  { x: 33, y: 66 },
+  { x: 33, y: 46 },
+  { x: 36, y: 42 },
+  { x: 36, y: 28 },
+  { x: 26, y: 15 },
+  { x: 26, y: 0 },
+]
+
+/**
+ * A thick wall box hugging one side of a boundary segment. The box is offset
+ * outward by half its thickness and extended past both ends so consecutive
+ * boxes overlap at corners and leave no seam a marble could slip through.
+ */
+function boundaryWall(a: TrackPoint, b: TrackPoint, side: BoundarySide): TrackRect {
+  const dx = b.x - a.x
+  const dy = b.y - a.y
+  const length = Math.hypot(dx, dy)
+  const nx = side === 'left' ? dy / length : -dy / length
+  const ny = side === 'left' ? -dx / length : dx / length
+  const cx = (a.x + b.x) / 2 + (nx * IH_WALL) / 2
+  const cy = (a.y + b.y) / 2 + (ny * IH_WALL) / 2
+  return {
+    cx,
+    cy,
+    halfW: length / 2 + IH_WALL / 2,
+    halfH: IH_WALL / 2,
+    angleDeg: (Math.atan2(dy, dx) * 180) / Math.PI,
+    role: 'channel',
+  }
+}
+
+function polylineWalls(points: readonly TrackPoint[], side: BoundarySide): TrackRect[] {
+  const walls: TrackRect[] = []
+  for (let i = 0; i < points.length - 1; i += 1) {
+    walls.push(boundaryWall(points[i], points[i + 1], side))
+  }
+  return walls
+}
+
+/** The fixed Ironhallow channel, identical for every seed and marble count. */
+export function ironhallowWalls(): TrackRect[] {
+  return [
+    ...polylineWalls(IH_LEFT_BOUNDARY, 'left'),
+    ...polylineWalls(IH_RIGHT_BOUNDARY, 'right'),
+  ]
+}
+
+/**
+ * Advisory racing line. It follows the channel, takes the left branch around
+ * the islands, skips through the teeth and spinner gauntlets (obstacles stand
+ * on the line there, which is why recovery refuses those stretches), then
+ * hugs the left of the peg field before the lower funnel.
+ */
+export const IRONHALLOW_CENTERLINE: TrackPoint[] = [
+  { x: 20, y: 238 },
+  { x: 20, y: 220 },
+  { x: 18, y: 216 },
+  { x: 10, y: 208 },
+  { x: 10, y: 200 },
+  { x: 17, y: 196 },
+  { x: 23, y: 191 },
+  { x: 20.9, y: 180 },
+  { x: 16, y: 170 },
+  { x: 14, y: 164 },
+  { x: 17.3, y: 159 },
+  { x: 17.3, y: 150 },
+  { x: 17.3, y: 140 },
+  { x: 17.3, y: 133 },
+  { x: 20, y: 122 },
+  { x: 23, y: 106 },
+  { x: 18.46, y: 101 },
+  { x: 18.46, y: 91 },
+  { x: 18.46, y: 88 },
+  { x: 20, y: 70 },
+  { x: 30, y: 63 },
+  { x: 30, y: 58 },
+  { x: 30, y: 56.5 },
+  { x: 14, y: 54 },
+  { x: 14, y: 50 },
+  { x: 14, y: 48.5 },
+  { x: 30.5, y: 46 },
+  { x: 30.5, y: 42 },
+  { x: 31, y: 38 },
+  { x: 32.5, y: 34 },
+  { x: 32.5, y: 30 },
+  { x: 28, y: 25 },
+  { x: 25, y: 20 },
+  { x: 20, y: 15 },
+  { x: 20, y: 8 },
+]
+
+const IH_START_ROW_GAP = 3
+const IH_START_BOTTOM_Y = 217
+const IH_START_TOP_Y = 237.6
+const IH_START_LANE_SPACING = 3
+
+/**
+ * Deterministic 2..20 grid for the 12-wide, 24-tall start channel. Three
+ * lanes sit at x = 17, 20, 23; rows alternate three and two marbles, which is
+ * the widest staggered arrangement that fits the 1.3D pair rule.
+ */
+function ironhallowStartPositions(total: number): { x: number; y: number }[] {
+  const lanes = Math.min(3, total)
+  const rowCounts: number[] = []
+  let remaining = total
+  while (remaining > 0) {
+    const capacity = rowCounts.length % 2 === 0 ? lanes : Math.max(1, lanes - 1)
+    const take = Math.min(capacity, remaining)
+    rowCounts.push(take)
+    remaining -= take
+  }
+  if (rowCounts.length > 1 && rowCounts[rowCounts.length - 1] === 1) {
+    const previous = rowCounts[rowCounts.length - 2]
+    if (previous > 1) {
+      rowCounts[rowCounts.length - 2] = previous - 1
+      rowCounts[rowCounts.length - 1] = 2
+    }
+  }
+
+  const rows = rowCounts.length
+  const rowGap =
+    rows > 1
+      ? Math.min(
+          IH_START_ROW_GAP,
+          (IH_START_TOP_Y - IH_START_BOTTOM_Y) / (rows - 1),
+        )
+      : 0
+
+  const positions: { x: number; y: number }[] = []
+  for (let row = 0; row < rows; row += 1) {
+    const rowCount = rowCounts[row]
+    const y = IH_START_BOTTOM_Y + rowGap * row
+    const leftmost = TRACK_WIDTH / 2 - ((rowCount - 1) / 2) * IH_START_LANE_SPACING
+    for (let column = 0; column < rowCount; column += 1) {
+      positions.push({
+        x: leftmost + IH_START_LANE_SPACING * column,
+        y,
+      })
+    }
+  }
+  return positions
+}
+
 /**
  * Deterministic start grid for `count` marbles (2..20).
  *
@@ -260,6 +464,7 @@ export function startPositionsFor(count: number, trackId?: TrackId): { x: number
     Math.max(Math.trunc(count), MIN_MARBLES),
     MAX_MARBLES,
   )
+  if (trackId === 'ironhallow') return ironhallowStartPositions(total)
   const channelWidth = trackId === 'wyrmwood' ? WW_START_CHANNEL_WIDTH : TRACK_WIDTH
   const maxLanes = trackId === 'wyrmwood' ? 5 : START_GRID_LANES
   const lanes = Math.min(maxLanes, total)
@@ -377,7 +582,7 @@ const WYRMWOOD_GATES: Gate[] = [
 export const START_LINE_Y_MAP: Record<TrackId, number> = {
   'wyrmwood': WYRMWOOD_START_LINE_Y,
   'eldergarde': 124,
-  'ironhallow': 124,
+  'ironhallow': IRONHALLOW_START_LINE_Y,
   'ashenmoor': 124,
 }
 
@@ -388,7 +593,7 @@ const ELDERGARDE_GATES: Gate[] = [
   { x: 20, y: 8 },
 ]
 const IRONHALLOW_GATES: Gate[] = [
-  { x: 20, y: 124 },
+  { x: 20, y: IRONHALLOW_START_LINE_Y },
   { x: 20, y: 8 },
 ]
 const ASHENMOOR_GATES: Gate[] = [
@@ -413,7 +618,7 @@ const SPECS: Record<TrackId, TrackSpec> = {
       { kind: 'empty' },
     ],
   },
-  'ironhallow': {
+    'ironhallow': {
     id: 'ironhallow',
     name: 'Ironhallow',
     tagline: 'Hardened, structured iron maze.',
@@ -422,6 +627,7 @@ const SPECS: Record<TrackId, TrackSpec> = {
       { kind: 'empty' },
     ],
   },
+
   'ashenmoor': {
     id: 'ashenmoor',
     name: 'Ashenmoor',
@@ -443,6 +649,9 @@ export function centerlineFor(
 ): TrackPoint[] {
   if (trackId === 'wyrmwood') {
     return wyrmwoodCourse(normalizeSeed(seed)).centerline.map((point) => ({ ...point }))
+  }
+  if (trackId === 'ironhallow') {
+    return IRONHALLOW_CENTERLINE.map((point) => ({ ...point }))
   }
   return SPECS[trackId].gates.map((gate) => ({ x: gate.x, y: gate.y }))
 }
@@ -498,6 +707,9 @@ function baseTrack(
   if (course) {
     walls.push(...course.walls)
   }
+  if (trackId === 'ironhallow') {
+    walls.push(...ironhallowWalls())
+  }
   const deadZones =
     trackId === 'wyrmwood'
       ? [
@@ -516,24 +728,130 @@ function baseTrack(
     walls,
     startLineY,
     startZone: {
-      minX: trackId === 'wyrmwood' ? WW_START_CHANNEL_LEFT : 0,
+      minX:
+        trackId === 'ironhallow'
+          ? IH_START_LEFT
+          : trackId === 'wyrmwood'
+            ? WW_START_CHANNEL_LEFT
+            : 0,
       minY: startLineY,
-      maxX: trackId === 'wyrmwood' ? WW_START_CHANNEL_RIGHT : TRACK_WIDTH,
+      maxX:
+        trackId === 'ironhallow'
+          ? IH_START_RIGHT
+          : trackId === 'wyrmwood'
+            ? WW_START_CHANNEL_RIGHT
+            : TRACK_WIDTH,
       maxY: height,
     },
     startPositions: startPositionsFor(count, trackId),
-    finishLine: {
-      y: 8,
-      zone: { minX: 0, minY: 5, maxX: TRACK_WIDTH, maxY: 11 },
-      sensor: { cx: TRACK_WIDTH / 2, cy: 8, halfW: TRACK_WIDTH / 2, halfH: 3 },
-    },
+    finishLine:
+      trackId === 'ironhallow'
+        ? {
+            y: 12.5,
+            zone: { minX: 14, minY: 10, maxX: 26, maxY: 15 },
+            sensor: { cx: 20, cy: 12.5, halfW: 6, halfH: 2.5 },
+          }
+        : {
+            y: 8,
+            zone: { minX: 0, minY: 5, maxX: TRACK_WIDTH, maxY: 11 },
+            sensor: { cx: TRACK_WIDTH / 2, cy: 8, halfW: TRACK_WIDTH / 2, halfH: 3 },
+          },
     centerline: centerlineFor(trackId, seed),
     deadZones,
   }
 }
 
+/**
+ * The fixed Ironhallow obstacle set. Positions never depend on the seed; only
+ * the spinner phases and per-spinner angular speeds do, and those are drawn
+ * from `rng`. Row 1 blocks the channel wall-to-wall (swept-circle gaps of at
+ * most 0.3), row 2 leaves 1.0D+ escape lanes on both sides.
+ */
+function ironhallowObstacles(rng: RandomSource): TrackObstacles {
+  const teeth: TrackRect[] = []
+  const teethRows = [98, 94.5, 91]
+  const teethColumns = [8.69, 11.69, 14.69, 22.23, 25.23, 28.23, 31.23]
+  for (let row = 0; row < teethRows.length; row += 1) {
+    const angleDeg = row % 2 === 0 ? 30 : -30
+    for (const cx of teethColumns) {
+      teeth.push({
+        cx,
+        cy: teethRows[row],
+        halfW: 1.35,
+        halfH: 0.25,
+        angleDeg,
+        role: 'teeth',
+      })
+    }
+  }
+
+  const pegs: TrackObstacles['pegs'] = []
+  for (const y of [178.5, 175.5, 171]) {
+    for (const x of [18.7, 23.1]) {
+      pegs.push({ cx: x, cy: y, radius: 0.7 })
+    }
+  }
+  const fieldRows: { y: number; xs: number[] }[] = [
+    { y: 40, xs: [10.8, 15.4, 20, 24.6, 29.2] },
+    { y: 35, xs: [13.1, 17.7, 22.3, 26.9] },
+    { y: 30, xs: [10.8, 15.4, 20, 24.6, 29.2] },
+  ]
+  for (const row of fieldRows) {
+    for (const x of row.xs) pegs.push({ cx: x, cy: row.y, radius: 0.7 })
+  }
+
+  const diamonds: TrackDiamond[] = [
+    { cx: 10.9, cy: 146, halfW: 4, halfH: 14, angleDeg: 0 },
+    { cx: 21.8, cy: 154, halfW: 2, halfH: 6, angleDeg: 0 },
+    { cx: 31.55, cy: 154.5, halfW: 1.5, halfH: 5.5, angleDeg: 0 },
+  ]
+
+  const bars: TrackRect[] = [
+    { cx: 18.5, cy: 60, halfW: 8.5, halfH: 0.3, angleDeg: -10, role: 'deflector' },
+    { cx: 25.5, cy: 52, halfW: 8.5, halfH: 0.3, angleDeg: 10, role: 'deflector' },
+    { cx: 18.5, cy: 45, halfW: 8.5, halfH: 0.3, angleDeg: -10, role: 'deflector' },
+    { cx: 19, cy: 23, halfW: 1.5, halfH: 0.3, angleDeg: -35, role: 'deflector' },
+    { cx: 15.4, cy: 18.5, halfW: 1.5, halfH: 0.3, angleDeg: 35, role: 'deflector' },
+  ]
+
+  const spinners: TrackSpinner[] = []
+  const spinnerRows = [
+    { y: 82, xs: [12.5, 18.2, 23.8, 29.5, 35.05] },
+    { y: 75.5, xs: [15.3, 20.95, 26.6, 32.25] },
+  ]
+  let index = 0
+  for (const row of spinnerRows) {
+    for (const cx of row.xs) {
+      const phaseDeg = randomInRange(rng, 0, 360)
+      const speed = randomInRange(rng, 1.8, 2.2)
+      spinners.push({
+        cx,
+        cy: row.y,
+        halfW: 2.7,
+        halfH: 0.5,
+        angleDeg: 90 + phaseDeg,
+        angularVelocity: index % 2 === 0 ? speed : -speed,
+      })
+      index += 1
+    }
+  }
+
+  return {
+    bars,
+    pegs,
+    diamonds,
+    rings: [],
+    concaveWalls: [],
+    teeth,
+    spinners,
+  }
+}
+
 /** Constructs the interior obstacles for `trackId`, drawing only on `rng`. */
 function buildObstacles(trackId: TrackId, rng: RandomSource): TrackObstacles {
+  if (trackId === 'ironhallow') {
+    return ironhallowObstacles(rng)
+  }
   if (trackId === 'wyrmwood') {
     return {
       bars: [],
@@ -541,6 +859,8 @@ function buildObstacles(trackId: TrackId, rng: RandomSource): TrackObstacles {
       diamonds: [],
       rings: [],
       concaveWalls: [],
+      teeth: [],
+      spinners: [],
     }
   }
 
@@ -550,6 +870,8 @@ function buildObstacles(trackId: TrackId, rng: RandomSource): TrackObstacles {
   const diamonds: TrackDiamond[] = []
   const rings: TrackRing[] = []
   const concaveWalls: TrackConcaveWall[] = []
+  const spinners: TrackSpinner[] = []
+
   const xClamp = (value: number): number =>
     Math.min(Math.max(value, 2.5), TRACK_WIDTH - 2.5)
 
@@ -644,7 +966,7 @@ function buildObstacles(trackId: TrackId, rng: RandomSource): TrackObstacles {
     halfH: 0.7, 
     angleDeg: randomInRange(rng, -45, 45) 
   })
-  return { bars, pegs, diamonds, rings, concaveWalls }
+  return { bars, pegs, diamonds, rings, concaveWalls, teeth: [], spinners }
 }
 
 function makeTrack(
@@ -661,12 +983,16 @@ function makeTrack(
  * seeded attempt fails validation, so a playable track is always returned.
  */
 function fallbackObstacles(trackId: TrackId): TrackObstacles {
+  if (trackId === 'ironhallow') {
+    return ironhallowObstacles(mulberry32(DEFAULT_SEEDS.ironhallow))
+  }
   const spec = SPECS[trackId]
   const bars: TrackRect[] = []
   const pegs: TrackObstacles['pegs'] = []
   const diamonds: TrackDiamond[] = []
   const rings: TrackRing[] = []
   const concaveWalls: TrackConcaveWall[] = []
+  const spinners: TrackSpinner[] = []
   for (let i = 0; i < spec.gates.length - 1; i += 1) {
     const recipe = spec.recipes[i]
     if (!recipe || recipe.kind === 'empty') continue
@@ -701,7 +1027,7 @@ function fallbackObstacles(trackId: TrackId): TrackObstacles {
       bars.push({ cx: 20, cy, halfW: 6, halfH: 0.7, angleDeg: 0 })
     }
   }
-  return { bars, pegs, diamonds, rings, concaveWalls }
+  return { bars, pegs, diamonds, rings, concaveWalls, teeth: [], spinners }
 }
 
 /** The hand-built fallback track for `trackId` (used when seeding fails). */

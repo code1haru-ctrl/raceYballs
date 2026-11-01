@@ -3,6 +3,7 @@ import { MarbleRaceSimulation } from './MarbleRaceSimulation'
 import { wyrmwoodCourse, WW_FLOOR_LEFT, WW_FLOOR_RIGHT } from '../track/generate'
 import { buildTrack } from '../track/generate'
 import { MARBLE_RADIUS } from '../config'
+import { pointRectDistance } from '../track/geometry'
 
 describe('Wyrmwood physics', () => {
   it('places ramp gaps at the low end', () => {
