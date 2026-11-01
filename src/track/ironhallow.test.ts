@@ -28,7 +28,7 @@ describe('Ironhallow sections', () => {
     for (const count of teethRows.values()) expect(count).toBe(7)
 
     const rowOne = t.obstacles.spinners.filter((spinner) => spinner.cy === 82)
-    const rowTwo = t.obstacles.spinners.filter((spinner) => spinner.cy === 75.5)
+    const rowTwo = t.obstacles.spinners.filter((spinner) => spinner.cy === 72)
     expect(rowOne).toHaveLength(5)
     expect(rowTwo).toHaveLength(4)
   })
@@ -111,10 +111,31 @@ describe('Ironhallow spinners', () => {
       if (!candidate) continue
       for (const spinner of t.obstacles.spinners) {
         const swept = Math.hypot(spinner.halfW, spinner.halfH)
-        expect(
-          Math.hypot(candidate.x - spinner.cx, candidate.y - spinner.cy),
-        ).toBeGreaterThanOrEqual(swept + 1.5 * D)
+      expect(
+        Math.hypot(candidate.x - spinner.cx, candidate.y - spinner.cy),
+      ).toBeGreaterThanOrEqual(swept + 1.5 * D)
       }
+    }
+  })
+
+  it('enforces the spinner swept-circle separation rule', () => {
+    const t = track()
+    for (let i = 0; i < t.obstacles.spinners.length; i += 1) {
+      const spinner = t.obstacles.spinners[i]
+      const swept = Math.hypot(spinner.halfW, spinner.halfH)
+      for (let j = i + 1; j < t.obstacles.spinners.length; j += 1) {
+        const other = t.obstacles.spinners[j]
+        const otherSwept = Math.hypot(other.halfW, other.halfH)
+        const gap = Math.hypot(spinner.cx - other.cx, spinner.cy - other.cy) - swept - otherSwept
+        expect(gap <= 0.3 || gap >= 1.5 * D).toBe(true)
+      }
+    }
+  })
+
+  it('validates spinner swept circles for the default seed and ten others', () => {
+    for (let seed = 1; seed <= 11; seed += 1) {
+      const report = validateTrack(buildTrack('ironhallow', seed))
+      expect(report.violations).toEqual([])
     }
   })
 })

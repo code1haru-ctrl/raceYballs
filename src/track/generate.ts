@@ -817,7 +817,7 @@ function ironhallowObstacles(rng: RandomSource): TrackObstacles {
   const spinners: TrackSpinner[] = []
   const spinnerRows = [
     { y: 82, xs: [12.5, 18.2, 23.8, 29.5, 35.05] },
-    { y: 75.5, xs: [15.3, 20.95, 26.6, 32.25] },
+    { y: 72, xs: [15.3, 20.95, 26.6, 32.25] },
   ]
   let index = 0
   for (const row of spinnerRows) {

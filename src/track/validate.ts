@@ -256,6 +256,8 @@ export function validateTrack(
         otherSwept
       if (gap < -0.05) {
         violations.push(`spinners ${i} and ${j} overlap`)
+      } else if (gap > 0.3 && gap < 1.5 * D) {
+        violations.push(`spinners ${i} and ${j} leave a partial gap of ${gap.toFixed(2)}`)
       }
     }
   }
