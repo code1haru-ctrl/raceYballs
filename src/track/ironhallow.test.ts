@@ -159,11 +159,17 @@ describe('Ironhallow spinners', () => {
                 Math.hypot(other.halfW, other.halfH),
             ),
         )
+        const pegGap = Math.min(
+          ...t.obstacles.pegs.map(
+            (peg) => Math.hypot(spinner.cx - peg.cx, spinner.cy - peg.cy) - peg.radius,
+          ),
+        )
         console.log(
-          `[swept-gap] spinner=${index} angle=${angle} wallGap=${wallGap.toFixed(2)} neighbourGap=${neighbourGap.toFixed(2)}`,
+          `[swept-gap] spinner=${index} angle=${angle} wallGap=${wallGap.toFixed(2)} neighbourGap=${neighbourGap.toFixed(2)} pegGap=${pegGap.toFixed(2)}`,
         )
         expect(wallGap <= 0.3 || wallGap >= 1.5 * D).toBe(true)
         expect(neighbourGap <= 0.3 || neighbourGap >= 1.5 * D).toBe(true)
+        expect(pegGap <= 0.3 || pegGap >= 1.5 * D).toBe(true)
       }
     }
   })
