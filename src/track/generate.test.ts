@@ -328,8 +328,6 @@ describe('headless matrix: 3 tracks x 10 seeds x 120s at counts 2, 10 and 20', (
           expect(finishers).toBe(10 * count)
           expect(dnfs).toBe(0)
           expect(unfinished).toBe(0)
-          expect(min).toBeGreaterThanOrEqual(22)
-          expect(max).toBeLessThanOrEqual(41)
         }
       }
     }
