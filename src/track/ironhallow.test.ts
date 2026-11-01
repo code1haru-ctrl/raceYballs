@@ -138,6 +138,35 @@ describe('Ironhallow spinners', () => {
       expect(report.violations).toEqual([])
     }
   })
+
+  it('checks the swept-gap rule at every rotation angle for the clustered spinners', () => {
+    const t = track()
+    const clustered = [1, 2, 7]
+    for (const index of clustered) {
+      const spinner = t.obstacles.spinners[index]
+      const swept = Math.hypot(spinner.halfW, spinner.halfH)
+      for (let angle = 0; angle < 360; angle += 5) {
+        const wallGap = Math.min(
+          ...t.walls.map((wall) => pointRectDistance(spinner.cx, spinner.cy, wall) - swept),
+        )
+        const neighbourGap = Math.min(
+          ...t.obstacles.spinners
+            .filter((_, i) => i !== index)
+            .map(
+              (other) =>
+                Math.hypot(spinner.cx - other.cx, spinner.cy - other.cy) -
+                swept -
+                Math.hypot(other.halfW, other.halfH),
+            ),
+        )
+        console.log(
+          `[swept-gap] spinner=${index} angle=${angle} wallGap=${wallGap.toFixed(2)} neighbourGap=${neighbourGap.toFixed(2)}`,
+        )
+        expect(wallGap <= 0.3 || wallGap >= 1.5 * D).toBe(true)
+        expect(neighbourGap <= 0.3 || neighbourGap >= 1.5 * D).toBe(true)
+      }
+    }
+  })
 })
 
 describe('Ironhallow solids', () => {
