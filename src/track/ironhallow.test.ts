@@ -278,39 +278,34 @@ describe('Ironhallow matrix: 10 seeds x counts 2/10/20', () => {
     }
   }, 240_000)
 
-  it('logs recovery positions and nearest obstacles at count 20 for the default seed and five others', () => {
+  it('investigates recovery causes at count 20 for seeds 1-6', () => {
     const seeds = [1, 2, 3, 4, 5, 6]
-    const logs: string[] = []
-    const spinnerCounts = new Map<string, number>()
+    let totalAsleep = 0
+    const recoveryPositions: {x: number, y: number}[] = []
+
     for (const seed of seeds) {
       const t = buildTrack('ironhallow', seed, 20)
       const defs = MARBLES.slice(0, 20).map((marble) => ({ id: marble.id }))
       const sim = new MarbleRaceSimulation(defs, t)
       const recovery = new RecoveryManager(t)
+
       recovery.onRecover = (event) => {
-        let nearestSpinner = -1
-        let nearestClearance = Number.POSITIVE_INFINITY
-        for (let i = 0; i < t.obstacles.spinners.length; i += 1) {
-          const spinner = t.obstacles.spinners[i]
-          const clearance = Math.hypot(event.to.x - spinner.cx, event.to.y - spinner.cy) - Math.hypot(spinner.halfW, spinner.halfH)
-          if (clearance < nearestClearance) {
-            nearestClearance = clearance
-            nearestSpinner = i
-          }
-        }
-        logs.push(
-          `seed=${seed} marble=${event.marbleId} attempt=${event.attempt} to=(x:${event.to.x.toFixed(2)},y:${event.to.y.toFixed(2)}) nearestSpinner=${nearestSpinner} clearance=${nearestClearance.toFixed(2)}`,
-        )
-        spinnerCounts.set(String(nearestSpinner), (spinnerCounts.get(String(nearestSpinner)) ?? 0) + 1)
+         // Access the physics body directly for sleep status
+         // Using the fact that bodies are in the same order as marbles in simulation
+         // This is a bit hacky but accesses private bodies if I can cast or access via test-friendly simulation
+         const body = (sim as any).bodies[event.index]
+         if (body && !body.isAwake()) totalAsleep++
+         
+         recoveryPositions.push({ x: event.to.x, y: event.to.y })
       }
+
       const steps = Math.ceil(90 / FIXED_TIME_STEP)
       for (let step = 0; step < steps && !sim.isCompleted(); step += 1) {
         sim.step(FIXED_TIME_STEP)
         recovery.update(sim)
       }
     }
-    console.log(`[recovery-log] count=20 seeds=${seeds.join(',')}`)
-    console.log(logs.join('\n'))
-    console.log(`[recovery-log] spinner recovery counts: ${[...spinnerCounts.entries()].map(([key, value]) => `spinner${key}=${value}`).join(', ')}`)
+    console.log(`[analysis] totalAsleep=${totalAsleep}`)
+    console.log(`[analysis] positions=${JSON.stringify(recoveryPositions.slice(0, 20))}`)
   }, 240_000)
 })
