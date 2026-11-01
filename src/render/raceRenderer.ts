@@ -113,7 +113,7 @@ export function drawRace(
   const view = camera.getView()
   ctx.save()
   applyWorldTransform(ctx, view, { width, height })
-  drawTrackInterior(ctx, sim.track, theme.accent, view.scale)
+  drawTrackInterior(ctx, sim.track, view.scale)
   drawStartAndFinish(ctx, sim.track, theme.accent, view.scale)
   drawObstacles(ctx, sim.track, theme.accent, view.scale, sim.spinnerAngles())
   drawMarbles(ctx, sim, configById)
@@ -174,7 +174,6 @@ function traceRect(ctx: CanvasRenderingContext2D, rect: TrackRect): void {
 function drawTrackInterior(
   ctx: CanvasRenderingContext2D,
   track: TrackData,
-  accent: string,
   unit: number,
 ): void {
   const { width, height } = track
@@ -210,44 +209,17 @@ function drawTrackInterior(
   }
 
   for (const wall of track.walls) {
-    const isChannel = wall.role === 'channel' || wall.role === 'ramp'
-    ctx.fillStyle = isChannel ? 'rgba(48, 54, 68, 0.98)' : 'rgba(13, 16, 26, 0.92)'
+    ctx.save()
+    ctx.shadowColor = 'rgba(166, 174, 190, 0.35)'
+    ctx.shadowBlur = 6 / unit
+    ctx.strokeStyle = 'rgba(166, 174, 190, 0.45)'
+    ctx.lineWidth = 1.5 / unit
+    ctx.lineJoin = 'round'
+    ctx.lineCap = 'round'
     traceRect(ctx, wall)
-    ctx.fill()
+    ctx.stroke()
+    ctx.restore()
   }
-
-  ctx.strokeStyle = rgba(accent, 0.14)
-  ctx.lineWidth = 6 / unit
-  strokeWallOutlines(ctx, track, false)
-  ctx.strokeStyle = rgba(accent, 0.7)
-  ctx.lineWidth = 1.6 / unit
-  strokeWallOutlines(ctx, track, false)
-
-  ctx.strokeStyle = 'rgba(166, 174, 190, 0.2)'
-  ctx.lineWidth = 6 / unit
-  strokeWallOutlines(ctx, track, true)
-  ctx.strokeStyle = 'rgba(190, 198, 212, 0.72)'
-  ctx.lineWidth = 1.4 / unit
-  strokeWallOutlines(ctx, track, true)
-}
-
-function strokeWallOutlines(
-  ctx: CanvasRenderingContext2D,
-  track: TrackData,
-  channel: boolean,
-): void {
-  ctx.beginPath()
-  for (const wall of track.walls) {
-    const isChannel = wall.role === 'channel' || wall.role === 'ramp'
-    if (isChannel !== channel) continue
-    const corners = rectCorners(wall)
-    ctx.moveTo(corners[0].x, corners[0].y)
-    for (let i = 1; i < corners.length; i += 1) {
-      ctx.lineTo(corners[i].x, corners[i].y)
-    }
-    ctx.closePath()
-  }
-  ctx.stroke()
 }
 
 function drawStartAndFinish(

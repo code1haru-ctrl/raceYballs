@@ -60,17 +60,16 @@ function TrackPreview({ track, accent }: { track: TrackData; accent: string }) {
         />
       ))}
       {track.walls.map((wall, index) => {
-        const isChannel = wall.role === 'channel' || wall.role === 'ramp'
         const corners = rectCorners(wall).map(p => `${p.x},${height - p.y}`).join(' ')
         return (
-          <polygon
+          <polyline
             key={index}
             points={corners}
-            fill={isChannel ? 'rgba(166, 174, 190, 0.45)' : accent}
-            fillOpacity={isChannel ? 1 : 0.22}
-            stroke={isChannel ? 'rgba(190, 198, 212, 0.7)' : accent}
-            strokeOpacity={isChannel ? 1 : 0.5}
-            strokeWidth={0.4}
+            fill="none"
+            stroke="rgba(166, 174, 190, 0.45)"
+            strokeWidth={0.15}
+            strokeLinecap="round"
+            strokeLinejoin="round"
           />
         )
       })}
