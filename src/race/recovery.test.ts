@@ -108,6 +108,23 @@ describe('recovery candidate', () => {
     expect(candidate).not.toBeNull()
     expect(candidate?.progress ?? 0).toBeLessThan(24)
   })
+
+  it('refuses a spot that is too close to a spinner', () => {
+    const spinner = { cx: 20, cy: 30, halfW: 2, halfH: 3, angleDeg: 0, angularVelocity: 1 }
+    const trackWithSpinner: TrackData = {
+      ...OPEN_TRACK,
+      obstacles: { ...OPEN_TRACK.obstacles, spinners: [spinner] },
+    }
+    // Swept radius = hypot(2, 3) = 3.605.
+    // 1.5D = 3.3.
+    // Min distance from center = 3.605 + 3.3 = 6.905.
+    // Point at 20, 36 is dist 6, which is < 6.905, so it should be rejected.
+    const path = new CenterlinePath([{ x: 20, y: 36 }])
+    const candidate = pickRecoveryCandidate(trackWithSpinner, path, 0, {
+      minClearance: 1.5 * MARBLE_DIAMETER,
+    })
+    expect(candidate).toBeNull()
+  })
 })
 
 describe('stuck detector', () => {

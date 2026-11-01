@@ -89,9 +89,10 @@ export function geometryClearance(
     const sweptRadius = Math.hypot(spinner.halfW, spinner.halfH)
     nearest = Math.min(
       nearest,
-      Math.hypot(x - spinner.cx, y - spinner.cy) - sweptRadius,
+      Math.hypot(x - spinner.cx, y - spinner.cy) - sweptRadius + MARBLE_RADIUS,
     )
   }
+
 
   if (!Number.isFinite(nearest)) return Number.POSITIVE_INFINITY
   return nearest - MARBLE_RADIUS
